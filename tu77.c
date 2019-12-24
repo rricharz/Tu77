@@ -57,8 +57,8 @@
 
 #define NUMANGLES		10		// number of angles simulated
 
-#define MIN_TRADIUS		65		// in mm
-#define MAX_TRADIUS		117		// in mm
+#define MIN_TRADIUS		100		// in mm
+#define MAX_TRADIUS		190		// in mm
 #define FULL_RPS		4.5		// in turns per second
 
 
@@ -131,8 +131,8 @@ static void do_drawing(cairo_t *cr)
 	
 	cairo_scale(cr,glob.scale,glob.scale);
 		
-	printf("do_drawing, delta_time = %ld ms, angle1 = %ld deg, angle2 = %ld\n",
-		delta_t, glob.angle1, glob.angle2);
+	printf("do_drawing, delta_time = %ld ms, d_angle1 = %ld deg, d_angle2 = %ld\n",
+		delta_t, delta_angle1, delta_angle2);
 		
 	cairo_set_source_surface(cr, glob.image, 0, 0);
 	cairo_paint(cr);
@@ -153,6 +153,23 @@ static void do_drawing(cairo_t *cr)
 		cairo_set_source_surface(cr, glob.reel1[index2], REEL2X, REEL2Y);
 		cairo_paint(cr);
 	}
+	
+	int w = cairo_image_surface_get_width(glob.reel1[0]);
+	int h = cairo_image_surface_get_height(glob.reel1[0]);
+	
+	cairo_set_source_rgba(cr, 0.2, 0.1, 0.0, 0.3);
+	
+	int lw = glob.radius1 - MIN_TRADIUS;
+	cairo_set_line_width(cr, lw);
+	cairo_arc(cr, REEL1X  + w / 2, REEL1Y + h / 2, glob.radius1 - (lw / 2), 0.0, 2 * M_PI);
+	cairo_stroke(cr);
+	
+	lw = glob.radius2 - MIN_TRADIUS;
+	// printf("w = %d, radius2=%d, min=%d, lw=%d\n", w, glob.radius2, MIN_TRADIUS, lw);
+	cairo_set_line_width(cr, lw);
+	cairo_arc(cr, REEL2X  + w / 2, REEL2Y + h / 2, glob.radius2 - (lw / 2), 0.0, 2 * M_PI);
+	cairo_stroke(cr);
+	
 }
 
 static void do_logic()
@@ -188,6 +205,7 @@ static gboolean on_timer_event(GtkWidget *widget)
 	
     do_logic();
     if ((glob.actual_speed1 != 0) || (glob.actual_speed2 != 0)) {
+		if (!moving) d_mSeconds(); // start timing for moving reels			
 		gtk_widget_queue_draw(widget);
 		moving = 1;
 	}
@@ -333,8 +351,8 @@ int main(int argc, char *argv[])
   glob.last_remote_status = 0;
   glob.angle1 = 0;
   glob.angle2 = 100;
-  glob.radius1 = MIN_TRADIUS;
-  glob.radius2 = MAX_TRADIUS;
+  glob.radius1 = MIN_TRADIUS + 20;
+  glob.radius2 = MAX_TRADIUS -10;
   d_mSeconds(); // initialize delta timer
   
   glob.image     = readpng("Te16-open.png");
