@@ -48,7 +48,7 @@
 // Tape motion on and off times are extended to a minimal time of
 // TIME_INTERVAL * C_TAPE to make them visible 
 
-#define TIME_INTERVAL    40		// timer interval in msec
+#define TIME_INTERVAL	40		// timer interval in msec
 
 #define REEL1X			370
 #define REEL1Y			98
@@ -57,6 +57,10 @@
 
 #define NUMANGLES		10		// number of angles simulated
 
+#define MIN_TRADIUS		65		// in mm
+#define MAX_TRADIUS		117		// in mm
+#define FULL_RPS		4.5		// in turns per second
+
 
 struct {
   cairo_surface_t *image;
@@ -64,8 +68,9 @@ struct {
   double scale;
   int remote_status, last_remote_status;
   int argFullscreen, argAudio;
-  int requested_speed, actual_speed;
-  long angle;
+  int requested_speed1, actual_speed1, requested_speed2, actual_speed2;
+  long angle1, angle2;
+  int radius1, radius2;
 } glob;
 
 long d_mSeconds()
@@ -115,25 +120,39 @@ static gboolean on_draw_event(GtkWidget *widget, cairo_t *cr,
 
 static void do_drawing(cairo_t *cr)
 {
+	
 	long delta_t = d_mSeconds();
-	long delta_angle = glob.actual_speed * delta_t * 36 / 100;
-	glob.angle = (glob.angle + delta_angle) % 360;
-	
-	int index = glob.angle * NUMANGLES / 360;
-	
-	printf("do_drawing, delta_time = %ld ms, delta_angle = %ld deg, angle = %d, index = %d\n",
-		delta_t, delta_angle, glob.angle, index);
+	long delta_angle1 = glob.actual_speed1 * delta_t * 36 / 100;
+	long delta_angle2 = glob.actual_speed2 * delta_t * 36 / 100;
+	glob.angle1 = (glob.angle1 + delta_angle1) % 360;
+	glob.angle2 = (glob.angle2 + delta_angle2) % 360;
+	int index1 = glob.angle1 * NUMANGLES / 360;
+	int index2 = glob.angle2 * NUMANGLES / 360;
 	
 	cairo_scale(cr,glob.scale,glob.scale);
-	
+		
+	printf("do_drawing, delta_time = %ld ms, angle1 = %ld deg, angle2 = %ld\n",
+		delta_t, glob.angle1, glob.angle2);
+		
 	cairo_set_source_surface(cr, glob.image, 0, 0);
 	cairo_paint(cr);
 	
-	cairo_set_source_surface(cr, glob.reel1bl[index], REEL1X, REEL1Y);
-	cairo_paint(cr);
+	if (glob.actual_speed1 != 0) {
 	
-	cairo_set_source_surface(cr, glob.reel1bl[index], REEL2X, REEL2Y);
-	cairo_paint(cr);	
+		cairo_set_source_surface(cr, glob.reel1bl[index1], REEL1X, REEL1Y);
+		cairo_paint(cr);
+	
+		cairo_set_source_surface(cr, glob.reel1bl[index1], REEL2X, REEL2Y);
+		cairo_paint(cr);
+	}
+	else {
+		
+		cairo_set_source_surface(cr, glob.reel1[index1], REEL1X, REEL1Y);
+		cairo_paint(cr);
+	
+		cairo_set_source_surface(cr, glob.reel1[index2], REEL2X, REEL2Y);
+		cairo_paint(cr);
+	}
 }
 
 static void do_logic()
@@ -143,27 +162,39 @@ static void do_logic()
 	if (glob.last_remote_status != glob.remote_status)
 		printf("remote state = 0x%02x\n", glob.remote_status);
 		
-	if ((glob.remote_status & TSTATE_WRITE) || (glob.remote_status & TSTATE_READ) || (glob.remote_status & TSTATE_SEEK))
-		glob.requested_speed = 6; // rps
-	else
-		glob.requested_speed = 0;
+	// glob.remote_status = TSTATE_READ; // for debugging
 		
-	glob.requested_speed = 6; // for debugging
+	if ((glob.remote_status & TSTATE_WRITE) || (glob.remote_status & TSTATE_READ) || (glob.remote_status & TSTATE_SEEK)) {
+		glob.requested_speed1 = (int)(FULL_RPS * MAX_TRADIUS / glob.radius1 + 0.5); // rps
+		glob.requested_speed2 = (int)(FULL_RPS * MAX_TRADIUS / glob.radius2 + 0.5); 
+	}
+	else {
+		glob.requested_speed1 = 0;
+		glob.requested_speed2 = 0;
+	}
 	
-	// linear acceleration
-	if (glob.actual_speed > glob.requested_speed) glob.actual_speed--;
-	if (glob.actual_speed < glob.requested_speed) glob.actual_speed++;	
-	
+	// linear acceleration for now, vacuum column position needs to be used
+	if (glob.actual_speed1 > glob.requested_speed1) glob.actual_speed1--;
+	if (glob.actual_speed1 < glob.requested_speed1) glob.actual_speed1++;	
+	if (glob.actual_speed2 > glob.requested_speed2) glob.actual_speed2--;
+	if (glob.actual_speed2 < glob.requested_speed2) glob.actual_speed2++;	
+
+	glob.last_remote_status = glob.remote_status;
 }
 
 static gboolean on_timer_event(GtkWidget *widget)
 {
-	static int timer_counter = 0;
-	
-	timer_counter++;
+	static int moving = 0;
 	
     do_logic();
-	gtk_widget_queue_draw(widget);
+    if ((glob.actual_speed1 != 0) || (glob.actual_speed2 != 0)) {
+		gtk_widget_queue_draw(widget);
+		moving = 1;
+	}
+	else if (moving) { // draw the reels once more when moving stops
+		gtk_widget_queue_draw(widget);
+		moving = 0;
+	}
 	return TRUE;
 
 }
@@ -295,10 +326,15 @@ int main(int argc, char *argv[])
     firstArg++;
   }
   
-  glob.requested_speed = 0;
-  glob.actual_speed = 0,
+  glob.requested_speed1 = 0;
+  glob.actual_speed1 = 0,
+  glob.requested_speed2 = 0;
+  glob.actual_speed2 = 0,
   glob.last_remote_status = 0;
-  glob.angle = 0.0;
+  glob.angle1 = 0;
+  glob.angle2 = 100;
+  glob.radius1 = MIN_TRADIUS;
+  glob.radius2 = MAX_TRADIUS;
   d_mSeconds(); // initialize delta timer
   
   glob.image     = readpng("Te16-open.png");

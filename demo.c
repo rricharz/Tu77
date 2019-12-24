@@ -60,25 +60,11 @@ int main(int argc, char **argv)
 {	
 	system("pkill mpg321");
 	setStatus(0);
-	sleep(1);
-	setStatus(TSTATE_ONLINE | TSTATE_BACKWARDS | TSTATE_SEEK);
-	sleep(2);
-	setStatus(TSTATE_ONLINE | TSTATE_SEEK);
-	usleep(500000);
-	sleep(1);
-	setStatus(TSTATE_ONLINE | TSTATE_BACKWARDS | TSTATE_SEEK | TSTATE_DRIVE1);
-	sleep(2);
-	setStatus(TSTATE_ONLINE | TSTATE_SEEK | TSTATE_DRIVE1);
-	usleep(500000);
-	for (int i = 1; i < 10; i++) {
+	for (int i = 1; i < 100; i++) {
 		setStatus(TSTATE_ONLINE);
-		usleep(500000);
+		usleep(1000000);
 		setStatus(TSTATE_ONLINE | TSTATE_READ);
-		sleep(3);
-		setStatus(TSTATE_ONLINE | TSTATE_DRIVE1);
-		usleep(500000);
-		setStatus(TSTATE_ONLINE | TSTATE_WRITE | TSTATE_DRIVE1);
-		sleep(3);
+		usleep(400000);
 	}
 	setStatus(0);
 	fclose(statusFile);	
