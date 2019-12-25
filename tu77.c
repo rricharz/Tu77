@@ -54,23 +54,34 @@
 #define REEL1Y			98
 #define REEL2X			365
 #define REEL2Y			568
+#define VC1X			150		// vacuum column 1 x position in dots
+#define VC1Y			450		// vacuum column 1 y position in dots
+#define VC1R			36		// valuum column 1 radius in dots
+#define VC2X			295		// vacuum column 1 x position in dots
+#define VC2Y			750		// vacuum column 1 y position in dots
+#define VC2R			36		// valuum column 1 radius in dots
 
 #define NUMANGLES		10		// number of angles simulated
 
-#define MIN_TRADIUS		100		// in mm
-#define MAX_TRADIUS		190		// in mm
+#define MIN_TRADIUS		100		// tape radius in dots
+#define MAX_TRADIUS		190		// tape radiusin dots
 #define FULL_RPS		4.5		// in turns per second
+#define MAX_DVC1		350		// maximal delta vacuum column 1 in dots
+#define MAX_DVC2		350		// maximal delta vacuum column 2 in dots
+#define SCALE_VC		4.0		// scaling for vacuum column
 
 
 struct {
   cairo_surface_t *image;
   cairo_surface_t *reel1[NUMANGLES], *reel1bl[NUMANGLES];
   double scale;
+  double delta_t;
   int remote_status, last_remote_status;
   int argFullscreen, argAudio;
-  int requested_speed1, actual_speed1, requested_speed2, actual_speed2;
-  long angle1, angle2;
-  int radius1, radius2;
+  double requested_speed1, actual_speed1, requested_speed2, actual_speed2;
+  double angle1, angle2;
+  double radius1, radius2;
+  double delta_vc1, delta_vc2;
 } glob;
 
 long d_mSeconds()
@@ -120,19 +131,17 @@ static gboolean on_draw_event(GtkWidget *widget, cairo_t *cr,
 
 static void do_drawing(cairo_t *cr)
 {
-	
-	long delta_t = d_mSeconds();
-	long delta_angle1 = glob.actual_speed1 * delta_t * 36 / 100;
-	long delta_angle2 = glob.actual_speed2 * delta_t * 36 / 100;
-	glob.angle1 = (glob.angle1 + delta_angle1) % 360;
-	glob.angle2 = (glob.angle2 + delta_angle2) % 360;
+	double delta_angle1 = glob.actual_speed1 * glob.delta_t * 0.25 * MAX_TRADIUS / glob.radius1;
+	double delta_angle2 = glob.actual_speed2 * glob.delta_t * 0.25 * MAX_TRADIUS / glob.radius2;
+	glob.angle1 = (double)((long)(glob.angle1 + delta_angle1) % 360);
+	glob.angle2 = (double)((long)(glob.angle2 + delta_angle2) % 360);
 	int index1 = glob.angle1 * NUMANGLES / 360;
 	int index2 = glob.angle2 * NUMANGLES / 360;
 	
 	cairo_scale(cr,glob.scale,glob.scale);
 		
-	printf("do_drawing, delta_time = %ld ms, d_angle1 = %ld deg, d_angle2 = %ld\n",
-		delta_t, delta_angle1, delta_angle2);
+	printf("dt=%0.0f, da1=%0.0f, da2=%0.0f\n",
+		glob.delta_t, delta_angle1, delta_angle2);
 		
 	cairo_set_source_surface(cr, glob.image, 0, 0);
 	cairo_paint(cr);
@@ -154,6 +163,8 @@ static void do_drawing(cairo_t *cr)
 		cairo_paint(cr);
 	}
 	
+	// draw the tape on the reels
+		
 	int w = cairo_image_surface_get_width(glob.reel1[0]);
 	int h = cairo_image_surface_get_height(glob.reel1[0]);
 	
@@ -161,23 +172,34 @@ static void do_drawing(cairo_t *cr)
 	
 	int lw = glob.radius1 - MIN_TRADIUS;
 	cairo_set_line_width(cr, lw);
-	cairo_arc(cr, REEL1X  + w / 2, REEL1Y + h / 2, glob.radius1 - (lw / 2), 0.0, 2 * M_PI);
+	cairo_arc(cr, REEL1X  + w / 2, REEL1Y + h / 2, glob.radius1 - (lw / 2), 0.0, 2.0 * M_PI);
 	cairo_stroke(cr);
 	
 	lw = glob.radius2 - MIN_TRADIUS;
 	// printf("w = %d, radius2=%d, min=%d, lw=%d\n", w, glob.radius2, MIN_TRADIUS, lw);
 	cairo_set_line_width(cr, lw);
-	cairo_arc(cr, REEL2X  + w / 2, REEL2Y + h / 2, glob.radius2 - (lw / 2), 0.0, 2 * M_PI);
+	cairo_arc(cr, REEL2X  + w / 2, REEL2Y + h / 2, glob.radius2 - (lw / 2), 0.0, 2.0 * M_PI);
 	cairo_stroke(cr);
 	
+	// draw the tape in the vacuum columns
+	
+	cairo_set_source_rgba(cr, 0.2, 0.1, 0.0, 1.0);
+	cairo_set_line_width(cr, 1);
+	cairo_arc(cr, VC1X, VC1Y + glob.delta_vc1, VC1R, 0.0, M_PI);
+	cairo_stroke(cr);
+	cairo_arc(cr, VC2X, VC2Y + glob.delta_vc2, VC2R, 0.0, M_PI);
+	cairo_stroke(cr);	
 }
 
 static void do_logic()
+// logic and feedback circuit
 {	
 
 	glob.remote_status = getStatus();
+	glob.delta_t = (double)d_mSeconds();
+	
 	if (glob.last_remote_status != glob.remote_status)
-		printf("remote state = 0x%02x\n", glob.remote_status);
+		printf("********** Remote state=0x%02x\n", glob.remote_status);
 		
 	// glob.remote_status = TSTATE_READ; // for debugging
 		
@@ -190,11 +212,35 @@ static void do_logic()
 		glob.requested_speed2 = 0;
 	}
 	
-	// linear acceleration for now, vacuum column position needs to be used
-	if (glob.actual_speed1 > glob.requested_speed1) glob.actual_speed1--;
-	if (glob.actual_speed1 < glob.requested_speed1) glob.actual_speed1++;	
-	if (glob.actual_speed2 > glob.requested_speed2) glob.actual_speed2--;
-	if (glob.actual_speed2 < glob.requested_speed2) glob.actual_speed2++;	
+	// Calculate the actual vacuum column deltas, based on speed differences
+	
+	glob.delta_vc1 -= SCALE_VC * (glob.requested_speed1 - glob.actual_speed1) * glob.delta_t / TIME_INTERVAL;
+		
+	//if (glob.delta_vc1 > 5.0) glob.delta_vc1 -= 5.0;
+	//if (glob.delta_vc1 < -5.0) glob.delta_vc1 += 5.0;
+	if (glob.delta_vc1 > MAX_DVC1) glob.delta_vc1 = MAX_DVC1;
+	if (glob.delta_vc1 < -MAX_DVC1) glob.delta_vc1 = -MAX_DVC1;	
+	if ((glob.actual_speed1 == 0) && (glob.requested_speed1 == 0)) glob.delta_vc1 = 0.0;
+	
+	glob.delta_vc2 += SCALE_VC * (glob.requested_speed2 - glob.actual_speed2) * glob.delta_t / TIME_INTERVAL;
+		
+	//if (glob.delta_vc2 > 5.0) glob.delta_vc2 -= 5.0;
+	//if (glob.delta_vc2 < -5.0) glob.delta_vc2 += 5.0;
+	if (glob.delta_vc2 > MAX_DVC2) glob.delta_vc2 = MAX_DVC2;
+	if (glob.delta_vc2 < -MAX_DVC2) glob.delta_vc2 = -MAX_DVC2;	
+	
+	if ((glob.delta_vc1) || (glob.delta_vc1))
+		printf("**dvc1=%0.0f, dvc2=%0.0f\n", glob.delta_vc1, glob.delta_vc2);
+	
+	// Linear acceleration based on speed differences
+	// Vacuum column deltas are the integrals of the speed differences
+	// Differentiating these again could have been used here,
+	// but the same effect can be obtained by using the speed differences directly
+	
+	if (glob.actual_speed1 > glob.requested_speed1) glob.actual_speed1 -= 0.5;
+	if (glob.actual_speed1 < glob.requested_speed1) glob.actual_speed1 += 0.5;	
+	if (glob.actual_speed2 > glob.requested_speed2) glob.actual_speed2 -= 0.5;
+	if (glob.actual_speed2 < glob.requested_speed2) glob.actual_speed2 += 0.5;	
 
 	glob.last_remote_status = glob.remote_status;
 }
@@ -204,13 +250,14 @@ static gboolean on_timer_event(GtkWidget *widget)
 	static int moving = 0;
 	
     do_logic();
-    if ((glob.actual_speed1 != 0) || (glob.actual_speed2 != 0)) {
-		if (!moving) d_mSeconds(); // start timing for moving reels			
+    if ((glob.actual_speed1 != 0) || (glob.actual_speed2 != 0)) {		
 		gtk_widget_queue_draw(widget);
 		moving = 1;
 	}
 	else if (moving) { // draw the reels once more when moving stops
 		gtk_widget_queue_draw(widget);
+		glob.delta_vc1 = 0.0;
+		glob.delta_vc2 = 0.0;
 		moving = 0;
 	}
 	return TRUE;
@@ -351,6 +398,8 @@ int main(int argc, char *argv[])
   glob.last_remote_status = 0;
   glob.angle1 = 0;
   glob.angle2 = 100;
+  glob.delta_vc1 = 0;
+  glob.delta_vc2 = 0;
   glob.radius1 = MIN_TRADIUS + 20;
   glob.radius2 = MAX_TRADIUS -10;
   d_mSeconds(); // initialize delta timer
