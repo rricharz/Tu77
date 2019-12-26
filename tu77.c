@@ -25,11 +25,11 @@
  * 
  */
 
-#define TSTATE_ONLINE		 1
-#define TSTATE_DRIVE1		 2
-#define TSTATE_BACKWARDS	 4
-#define TSTATE_SEEK		 	8
-#define TSTATE_READ			16
+#define TSTATE_ONLINE		1
+#define TSTATE_DRIVE1		2
+#define TSTATE_BACKWARDS	4
+#define TSTATE_SEEK		8
+#define TSTATE_READ		16
 #define TSTATE_WRITE		32
 
 #define GDK_DISABLE_DEPRECATION_WARNINGS
@@ -48,7 +48,7 @@
 // Tape motion on and off times are extended to a minimal time of
 // TIME_INTERVAL * C_TAPE to make them visible 
 
-#define TIME_INTERVAL	40		// timer interval in msec
+#define TIME_INTERVAL		40		// timer interval in msec
 
 #define REEL1X			370
 #define REEL1Y			98
@@ -62,12 +62,12 @@
 #define VC2R			36		// valuum column 1 radius in dots
 
 #define NUMANGLES		10		// number of angles simulated
-
-#define MIN_TRADIUS		100		// tape radius in dots
-#define MAX_TRADIUS		190		// tape radiusin dots
+#define CAPACITY		2000000		// 2 Mbyte for now (need better value)
+#define MIN_TRADIUS		100.0		// tape radius in dots
+#define MAX_TRADIUS		190.0		// tape radiusin dots
 #define FULL_RPS		4.5		// in turns per second
 #define MAX_DVC1		350		// maximal delta vacuum column 1 in dots
-#define MAX_DVC2		350		// maximal delta vacuum column 2 in dots
+#define MAX_DVC2		300		// maximal delta vacuum column 2 in dots
 #define SCALE_VC		4.0		// scaling for vacuum column
 
 
@@ -82,6 +82,7 @@ struct {
   double angle1, angle2;
   double radius1, radius2;
   double delta_vc1, delta_vc2;
+  int position;
 } glob;
 
 long d_mSeconds()
@@ -110,6 +111,7 @@ int getStatus()
 		
 	if (statusFile != 0) {
 		st = getc(statusFile) - 32;
+		fscanf(statusFile,"%d",&glob.position);
 		fclose(statusFile);
 		if (st >= 0)
 			return st;
@@ -121,44 +123,49 @@ int getStatus()
 
 static void do_drawing(cairo_t *);
 
-static gboolean on_draw_event(GtkWidget *widget, cairo_t *cr, 
-    gpointer user_data)
+static gboolean on_draw_event(GtkWidget *widget, cairo_t *cr, gpointer user_data)
 {      
-  do_drawing(cr);
+	do_drawing(cr);
 
-  return FALSE;
+	return FALSE;
 }
 
 static void do_drawing(cairo_t *cr)
 {
 	double delta_angle1 = glob.actual_speed1 * glob.delta_t * 0.25 * MAX_TRADIUS / glob.radius1;
 	double delta_angle2 = glob.actual_speed2 * glob.delta_t * 0.25 * MAX_TRADIUS / glob.radius2;
-	glob.angle1 = (double)((long)(glob.angle1 + delta_angle1) % 360);
-	glob.angle2 = (double)((long)(glob.angle2 + delta_angle2) % 360);
-	int index1 = glob.angle1 * NUMANGLES / 360;
-	int index2 = glob.angle2 * NUMANGLES / 360;
+	glob.angle1 += delta_angle1;
+	while (glob.angle1 >= 360.0) glob.angle1 -= 360.0;
+	while (glob.angle1 < 0.0) glob.angle1 += 360.0;
+	glob.angle2 += delta_angle2;
+	while (glob.angle2 >= 360.0) glob.angle2 -= 360.0;
+	while (glob.angle2 < 0.0) glob.angle2 += 360.0;	
 	
 	cairo_scale(cr,glob.scale,glob.scale);
 		
 	printf("dt=%0.0f, da1=%0.0f, da2=%0.0f\n",
 		glob.delta_t, delta_angle1, delta_angle2);
-		
+
+	// draw the drive
 	cairo_set_source_surface(cr, glob.image, 0, 0);
 	cairo_paint(cr);
-	
-	if (glob.actual_speed1 != 0) {
-	
+
+	// draw the reels
+	int index1 = glob.angle1 * NUMANGLES / 360;
+	int index2 = NUMANGLES - (glob.angle2 * NUMANGLES / 360) - 1;
+	if (glob.actual_speed1 != 0) {	
 		cairo_set_source_surface(cr, glob.reel1bl[index1], REEL1X, REEL1Y);
 		cairo_paint(cr);
-	
-		cairo_set_source_surface(cr, glob.reel1bl[index1], REEL2X, REEL2Y);
+	}
+	else {		
+		cairo_set_source_surface(cr, glob.reel1[index1], REEL1X, REEL1Y);
+		cairo_paint(cr);
+	}
+	if (glob.actual_speed2 != 0) {	
+		cairo_set_source_surface(cr, glob.reel1bl[index2], REEL2X, REEL2Y);
 		cairo_paint(cr);
 	}
 	else {
-		
-		cairo_set_source_surface(cr, glob.reel1[index1], REEL1X, REEL1Y);
-		cairo_paint(cr);
-	
 		cairo_set_source_surface(cr, glob.reel1[index2], REEL2X, REEL2Y);
 		cairo_paint(cr);
 	}
@@ -196,13 +203,30 @@ static void do_logic()
 {	
 
 	glob.remote_status = getStatus();
+/*
+	if (glob.remote_status & TSTATE_DRIVE1) {
+		glob.actual_speed1 = 0;
+		glob.actual_speed2 = 0;
+		return;
+	}
+*/
 	glob.delta_t = (double)d_mSeconds();
-	
+		
+	// calculate current tape radius for both reels
+	// note: this is NOT a linear relation!
+	if (glob.position < 0) glob.position = 0;
+	if (glob.position > CAPACITY) glob.position = CAPACITY;
+	double f0square = (MIN_TRADIUS / MAX_TRADIUS) * (MIN_TRADIUS / MAX_TRADIUS);
+	double f1 = sqrt(((double)glob.position / CAPACITY) * (1.0 - f0square) + f0square);
+	double f2 = sqrt(((CAPACITY - (double)glob.position) / CAPACITY) * (1.0 - f0square) + f0square);	
 	if (glob.last_remote_status != glob.remote_status)
-		printf("********** Remote state=0x%02x\n", glob.remote_status);
-		
-	// glob.remote_status = TSTATE_READ; // for debugging
-		
+		printf("***** Remote state=0x%02x, pos=%d, f1=%0.3f\n", glob.remote_status, glob.position, f1);
+	glob.radius1 = f1 * MAX_TRADIUS;
+	glob.radius2 = f2 * MAX_TRADIUS;
+	if ((glob.remote_status & TSTATE_SEEK) && (glob.position == 0))
+		printf("REWINDING\n");
+	
+	// calculate requested reel speeds based on position	
 	if ((glob.remote_status & TSTATE_WRITE) || (glob.remote_status & TSTATE_READ) || (glob.remote_status & TSTATE_SEEK)) {
 		glob.requested_speed1 = (int)(FULL_RPS * MAX_TRADIUS / glob.radius1 + 0.5); // rps
 		glob.requested_speed2 = (int)(FULL_RPS * MAX_TRADIUS / glob.radius2 + 0.5); 
@@ -211,21 +235,23 @@ static void do_logic()
 		glob.requested_speed1 = 0;
 		glob.requested_speed2 = 0;
 	}
+	if (glob.remote_status & TSTATE_BACKWARDS) {
+		glob.requested_speed1 = -glob.requested_speed1;
+		glob.requested_speed2 = -glob.requested_speed2;
+	}
 	
 	// Calculate the actual vacuum column deltas, based on speed differences
 	
-	glob.delta_vc1 -= SCALE_VC * (glob.requested_speed1 - glob.actual_speed1) * glob.delta_t / TIME_INTERVAL;
+	glob.delta_vc1 += SCALE_VC * (glob.requested_speed1 - glob.actual_speed1) * glob.delta_t / TIME_INTERVAL;
 		
-	//if (glob.delta_vc1 > 5.0) glob.delta_vc1 -= 5.0;
-	//if (glob.delta_vc1 < -5.0) glob.delta_vc1 += 5.0;
+	glob.delta_vc1 *= 0.9;
 	if (glob.delta_vc1 > MAX_DVC1) glob.delta_vc1 = MAX_DVC1;
 	if (glob.delta_vc1 < -MAX_DVC1) glob.delta_vc1 = -MAX_DVC1;	
 	if ((glob.actual_speed1 == 0) && (glob.requested_speed1 == 0)) glob.delta_vc1 = 0.0;
 	
-	glob.delta_vc2 += SCALE_VC * (glob.requested_speed2 - glob.actual_speed2) * glob.delta_t / TIME_INTERVAL;
+	glob.delta_vc2 -= SCALE_VC * (glob.requested_speed2 - glob.actual_speed2) * glob.delta_t / TIME_INTERVAL;
 		
-	//if (glob.delta_vc2 > 5.0) glob.delta_vc2 -= 5.0;
-	//if (glob.delta_vc2 < -5.0) glob.delta_vc2 += 5.0;
+	glob.delta_vc2 *= 0.9;
 	if (glob.delta_vc2 > MAX_DVC2) glob.delta_vc2 = MAX_DVC2;
 	if (glob.delta_vc2 < -MAX_DVC2) glob.delta_vc2 = -MAX_DVC2;	
 	
@@ -249,8 +275,9 @@ static gboolean on_timer_event(GtkWidget *widget)
 {
 	static int moving = 0;
 	
-    do_logic();
-    if ((glob.actual_speed1 != 0) || (glob.actual_speed2 != 0)) {		
+	do_logic();
+	
+	if ((glob.actual_speed1 != 0) || (glob.actual_speed2 != 0)) {		
 		gtk_widget_queue_draw(widget);
 		moving = 1;
 	}
@@ -267,9 +294,9 @@ static gboolean on_timer_event(GtkWidget *widget)
 static gboolean on_button_release_event(GtkWidget *widget, GdkEventButton *event, gpointer user_data)
 {
 	// event-button = 1: means left mouse button; button = 3 means right mouse button    
-    // printf("on_button_release_event called, button %d, x = %d, y= %d\n", (int)event->button, (int)event->x, (int)event->y);
+	// printf("on_button_release_event called, button %d, x = %d, y= %d\n", (int)event->button, (int)event->x, (int)event->y);
 	int x = (int)((double)event->x / glob.scale);
-    int y = (int)((double)event->y / glob.scale);
+	int y = (int)((double)event->y / glob.scale);
 
 /*
     if (event->button == 1) {
@@ -298,8 +325,8 @@ static gboolean on_button_click_event(GtkWidget *widget, GdkEventButton *event, 
 	// event-button = 1: means left mouse button; button = 3 means right mouse button    
     // printf("on_button_click_event called, button %d, x = %d, y= %d\n", (int)event->button, (int)event->x, (int)event->y);
     
-    int x = (int)((double)event->x / glob.scale);
-    int y = (int)((double)event->y / glob.scale);
+	int x = (int)((double)event->x / glob.scale);
+	int y = (int)((double)event->y / glob.scale);
 /*    if (event->button == 1) {
 		for (int i = 0; i < 6; i++) {
 			if ((x >= buttonx[i]) && (x <= buttonx[i] + BUTTONXSIZE) &&
@@ -332,21 +359,21 @@ static gboolean on_button_click_event(GtkWidget *widget, GdkEventButton *event, 
 		}
 	}
 */
-    return TRUE;
+	return TRUE;
 }
 
 static void on_quit_event()
 {
 	system("pkill mpg321");
 	gtk_main_quit();
-    exit(0);
+	exit(0);
 }
 
 static void on_key_press(GtkWidget *widget, GdkEventKey *event, gpointer user_data)
 {
-    int ch;
-    // printf("key pressed, state =%04X, keyval =%04X\n", event->state, event->keyval);
-    if ((event->state == 0x4) && (event->keyval == 0x0063)) // ctrl-c
+	int ch;
+	// printf("key pressed, state =%04X, keyval =%04X\n", event->state, event->keyval);
+	if ((event->state == 0x4) && (event->keyval == 0x0063)) // ctrl-c
 		on_quit_event();
 	else if ((event->state == 0x4) && (event->keyval == 0x0071)) // ctrl-q
 		on_quit_event();
@@ -366,111 +393,111 @@ cairo_surface_t* readpng(char* s)
 
 int main(int argc, char *argv[])
 {
-  GtkWidget *window;
-  GtkWidget *darea;
+	GtkWidget *window;
+	GtkWidget *darea;
   
-  glob.argFullscreen = 0;
-  glob.argAudio = 0;
-  int firstArg = 1;
+	glob.argFullscreen = 0;
+	glob.argAudio = 0;
+	int firstArg = 1;
   
-  char s[32];
+	char s[32];
   
-  printf("tu77 version 0.1\n");
+	printf("tu77 version 0.1\n");
   
-  system("pkill mpg321");
+	system("pkill mpg321");
   
-  while (firstArg < argc) {
-	if (strcmp(argv[firstArg],"-full") == 0)
-		glob.argFullscreen = 1;
-	else if (strcmp(argv[firstArg],"-audio") == 0)
-		glob.argAudio = 1;            
-    else {
+	while (firstArg < argc) {
+		if (strcmp(argv[firstArg],"-full") == 0)
+			glob.argFullscreen = 1;
+		else if (strcmp(argv[firstArg],"-audio") == 0)
+			glob.argAudio = 1;            
+	else {
         printf("tu77: unknown argument %s\n", argv[firstArg]);
         exit(1);
-    }
-    firstArg++;
-  }
+	}
+	firstArg++;
+	}
   
-  glob.requested_speed1 = 0;
-  glob.actual_speed1 = 0,
-  glob.requested_speed2 = 0;
-  glob.actual_speed2 = 0,
-  glob.last_remote_status = 0;
-  glob.angle1 = 0;
-  glob.angle2 = 100;
-  glob.delta_vc1 = 0;
-  glob.delta_vc2 = 0;
-  glob.radius1 = MIN_TRADIUS + 20;
-  glob.radius2 = MAX_TRADIUS -10;
-  d_mSeconds(); // initialize delta timer
+	glob.requested_speed1 = 0;
+	glob.actual_speed1 = 0,
+	glob.requested_speed2 = 0;
+	glob.actual_speed2 = 0,
+	glob.last_remote_status = 0;
+	glob.angle1 = 0;
+	glob.angle2 = 100;
+	glob.delta_vc1 = 0;
+	glob.delta_vc2 = 0;
+	glob.radius1 = MIN_TRADIUS + 20;
+	glob.radius2 = MAX_TRADIUS -10;
+	d_mSeconds(); // initialize delta timer
   
-  glob.image     = readpng("Te16-open.png");
-  for (int i = 0; i < NUMANGLES; i++) {
-	sprintf(s,"Reel1-0%d.png",i);
-	glob.reel1[i] = readpng(s);
-	sprintf(s,"Reel1-0%dbl.png",i);
-	glob.reel1bl[i] = readpng(s);
-  }
+	glob.image     = readpng("Te16-open.png");
+	for (int i = 0; i < NUMANGLES; i++) {
+		sprintf(s,"Reel1-0%d.png",i);
+		glob.reel1[i] = readpng(s);
+		sprintf(s,"Reel1-0%dbl.png",i);
+		glob.reel1bl[i] = readpng(s);
+	}
 
-  gtk_init(&argc, &argv);
+	gtk_init(&argc, &argv);
 
-  window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+	window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
   
-  // set the background color
-  GdkColor color;
-  color.red   = 0;
-  color.green = 0;
-  color.blue  = 0;
-  gtk_widget_modify_bg(window, GTK_STATE_NORMAL, &color);
+	// set the background color
+	GdkColor color;
+	color.red   = 0;
+	color.green = 0;
+	color.blue  = 0;
+	gtk_widget_modify_bg(window, GTK_STATE_NORMAL, &color);
 
-  darea = gtk_drawing_area_new();
-  gtk_container_add(GTK_CONTAINER (window), darea);
+	darea = gtk_drawing_area_new();
+	gtk_container_add(GTK_CONTAINER (window), darea);
 
-  g_signal_connect(G_OBJECT(darea), "draw", 
-      G_CALLBACK(on_draw_event), NULL); 
-  g_signal_connect(window, "destroy",
-      G_CALLBACK (gtk_main_quit), NULL);
+	g_signal_connect(G_OBJECT(darea), "draw", 
+		G_CALLBACK(on_draw_event), NULL); 
+	g_signal_connect(window, "destroy",
+		G_CALLBACK (gtk_main_quit), NULL);
 
-  gtk_window_set_position(GTK_WINDOW(window), GTK_WIN_POS_CENTER);
+	gtk_window_set_position(GTK_WINDOW(window), GTK_WIN_POS_CENTER);
   
-  GdkScreen *screen = gtk_window_get_screen(GTK_WINDOW(window));
-  int screenWidth = gdk_screen_get_width(screen);
-  int screenHeight = gdk_screen_get_height(screen);
-  printf("Screen dimensions: %d x %d\n", screenWidth, screenHeight);
+	GdkScreen *screen = gtk_window_get_screen(GTK_WINDOW(window));
+	int screenWidth = gdk_screen_get_width(screen);
+	int screenHeight = gdk_screen_get_height(screen);
+	printf("Screen dimensions: %d x %d\n", screenWidth, screenHeight);
         
-  if (glob.argFullscreen) {        
-    // DISPLAY UNDECORATED FULL SCREEN WINDOW
-	gtk_window_set_decorated(GTK_WINDOW(window), FALSE);
-	gtk_window_fullscreen(GTK_WINDOW(window));
-	gtk_window_set_keep_above(GTK_WINDOW(window), FALSE);
-	glob.scale = screenHeight / 1080.0;
-  }
+	if (glob.argFullscreen) {        
+		// DISPLAY UNDECORATED FULL SCREEN WINDOW
+		gtk_window_set_decorated(GTK_WINDOW(window), FALSE);
+		gtk_window_fullscreen(GTK_WINDOW(window));
+		gtk_window_set_keep_above(GTK_WINDOW(window), FALSE);
+		glob.scale = screenHeight / 1080.0;
+	}
  
-  else {
-    // DISPLAY DECORATED WINDOW
-    gtk_window_set_decorated(GTK_WINDOW(window), TRUE);
-    gtk_window_set_default_size(GTK_WINDOW(window), 530, 540);
-    glob.scale = 0.5;                
-  } 
+	else {
+		// DISPLAY DECORATED WINDOW
+	gtk_window_set_decorated(GTK_WINDOW(window), TRUE);
+	gtk_window_set_default_size(GTK_WINDOW(window), 530, 540);
+	glob.scale = 0.5;                
+	} 
   
-  gtk_window_set_title(GTK_WINDOW(window), "tu77");
+	gtk_window_set_title(GTK_WINDOW(window), "tu77");
   
-  g_signal_connect(G_OBJECT(window), "button-press-event", G_CALLBACK(on_button_click_event), NULL);
-  g_signal_connect(G_OBJECT(window), "button-release-event", G_CALLBACK(on_button_release_event), NULL);
-  g_signal_connect(G_OBJECT(window), "key_press_event", G_CALLBACK(on_key_press), NULL);
+	g_signal_connect(G_OBJECT(window), "button-press-event", G_CALLBACK(on_button_click_event), NULL);
+	g_signal_connect(G_OBJECT(window), "button-release-event", G_CALLBACK(on_button_release_event), NULL);
+	g_signal_connect(G_OBJECT(window), "key_press_event", G_CALLBACK(on_key_press), NULL);
   
-  if (TIME_INTERVAL > 0) {
+	if (TIME_INTERVAL > 0) {
 		// Add timer event
 		// Register the timer and set time in mS.
 		// The timer_event() function is called repeatedly until it returns FALSE. 
 		g_timeout_add(TIME_INTERVAL, (GSourceFunc) on_timer_event, (gpointer) window);
 	}
 
-  gtk_widget_show_all(window);
+	gtk_widget_show_all(window);
 
-  gtk_main();
+	gtk_main();
 
-  cairo_surface_destroy(glob.image);
+	cairo_surface_destroy(glob.image);
 
-  return 0;
+	return 0;
 }

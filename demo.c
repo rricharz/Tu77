@@ -38,7 +38,7 @@
 
 static FILE *statusFile = 0;
 
-void setStatus(int status)
+void setStatus(int status, long position)
 // set the status bits in the status file
 // if status file is accessible
 {
@@ -51,22 +51,26 @@ void setStatus(int status)
 
 	if (statusFile != 0) {
 		fseek(statusFile,0L,SEEK_SET);
-		putc(32 + status,statusFile);
+		// putc(32 + status,statusFile);
+		fprintf(statusFile, "%c%ld\n", 32 + status, position);
 		fflush(statusFile);
 	}
 }
 
 int main(int argc, char **argv)
 {	
+	long pos;
 	system("pkill mpg321");
-	setStatus(0);
+	pos = 0;
+	setStatus(0, 0);
 	for (int i = 1; i < 100; i++) {
-		setStatus(TSTATE_ONLINE);
+		setStatus(TSTATE_ONLINE, pos);
 		usleep(1000000);
-		setStatus(TSTATE_ONLINE | TSTATE_READ);
+		setStatus(TSTATE_ONLINE | TSTATE_READ, pos);
 		usleep(400000);
+		pos +=  10000;
 	}
-	setStatus(0);
+	setStatus(0, 0);
 	fclose(statusFile);	
 	return 0;
 }
