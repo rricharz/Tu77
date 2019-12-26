@@ -54,26 +54,32 @@
 #define REEL1Y			98
 #define REEL2X			365
 #define REEL2Y			568
-#define VC1X			150		// vacuum column 1 x position in dots
+#define VC1X			149		// vacuum column 1 x position in dots
 #define VC1Y			450		// vacuum column 1 y position in dots
-#define VC1R			36		// valuum column 1 radius in dots
+#define VC1R			37		// valuum column 1 radius in dots
 #define VC2X			295		// vacuum column 1 x position in dots
 #define VC2Y			750		// vacuum column 1 y position in dots
 #define VC2R			36		// valuum column 1 radius in dots
+#define CAPSTANX		185
+#define CAPSTANY		105
+#define VC1TOPL			90
+#define VC1TOPR			140
+#define VC2TOPL			530
+#define VC2TOPR			575		
 
 #define NUMANGLES		10		// number of angles simulated
 #define CAPACITY		2000000		// 2 Mbyte for now (need better value)
 #define MIN_TRADIUS		100.0		// tape radius in dots
 #define MAX_TRADIUS		190.0		// tape radiusin dots
 #define FULL_RPS		4.5		// in turns per second
-#define MAX_DVC1		350		// maximal delta vacuum column 1 in dots
-#define MAX_DVC2		300		// maximal delta vacuum column 2 in dots
-#define SCALE_VC		4.0		// scaling for vacuum column
-
+#define MAX_DVC1		260		// maximal delta vacuum column 1 in dots
+#define MAX_DVC2		230		// maximal delta vacuum column 2 in dots
+#define SCALE_VC		3.0		// scaling for vacuum column
 
 struct {
   cairo_surface_t *image;
   cairo_surface_t *reel1[NUMANGLES], *reel1bl[NUMANGLES];
+  cairo_surface_t *capstan, *capstanb[2];
   double scale;
   double delta_t;
   int remote_status, last_remote_status;
@@ -83,6 +89,7 @@ struct {
   double radius1, radius2;
   double delta_vc1, delta_vc2;
   int position;
+  double positions_per_msec;
 } glob;
 
 long d_mSeconds()
@@ -132,6 +139,7 @@ static gboolean on_draw_event(GtkWidget *widget, cairo_t *cr, gpointer user_data
 
 static void do_drawing(cairo_t *cr)
 {
+	static int capstan_index;
 	double delta_angle1 = glob.actual_speed1 * glob.delta_t * 0.25 * MAX_TRADIUS / glob.radius1;
 	double delta_angle2 = glob.actual_speed2 * glob.delta_t * 0.25 * MAX_TRADIUS / glob.radius2;
 	glob.angle1 += delta_angle1;
@@ -149,7 +157,15 @@ static void do_drawing(cairo_t *cr)
 	// draw the drive
 	cairo_set_source_surface(cr, glob.image, 0, 0);
 	cairo_paint(cr);
-
+			
+	// draw the capstan
+	if (glob.requested_speed1 != 0.0)
+		cairo_set_source_surface(cr, glob.capstanb[capstan_index], CAPSTANX, CAPSTANY);
+	else	
+		cairo_set_source_surface(cr, glob.capstan, CAPSTANX, CAPSTANY);
+	capstan_index = (capstan_index) + 1 & 1;
+	cairo_paint(cr);
+	
 	// draw the reels
 	int index1 = glob.angle1 * NUMANGLES / 360;
 	int index2 = NUMANGLES - (glob.angle2 * NUMANGLES / 360) - 1;
@@ -191,26 +207,41 @@ static void do_drawing(cairo_t *cr)
 	// draw the tape in the vacuum columns
 	
 	cairo_set_source_rgba(cr, 0.2, 0.1, 0.0, 1.0);
-	cairo_set_line_width(cr, 1);
+	cairo_set_line_width(cr, 2);
+	cairo_move_to(cr, VC1X + VC1R, VC1TOPR);
+	cairo_line_to(cr, VC1X + VC1R, VC1Y + glob.delta_vc1);
 	cairo_arc(cr, VC1X, VC1Y + glob.delta_vc1, VC1R, 0.0, M_PI);
+	cairo_line_to(cr, VC1X - VC1R, VC1TOPL);
 	cairo_stroke(cr);
+	cairo_move_to(cr, VC2X + VC2R, VC2TOPR);
+	cairo_line_to(cr, VC2X + VC2R, VC2Y + glob.delta_vc2);
 	cairo_arc(cr, VC2X, VC2Y + glob.delta_vc2, VC2R, 0.0, M_PI);
-	cairo_stroke(cr);	
+	cairo_line_to(cr, VC2X - VC2R, VC2TOPL);
+	cairo_stroke(cr);
+		
 }
 
 static void do_logic()
 // logic and feedback circuit
 {	
-
+	int lastPosition = glob.position;
 	glob.remote_status = getStatus();
-/*
-	if (glob.remote_status & TSTATE_DRIVE1) {
-		glob.actual_speed1 = 0;
-		glob.actual_speed2 = 0;
-		return;
-	}
-*/
 	glob.delta_t = (double)d_mSeconds();
+	
+	if (glob.last_remote_status != glob.remote_status) {
+		printf("***** Remote state=0x%02x, pos=%d\n", glob.remote_status, glob.position);
+		double dtime = (glob.position - lastPosition) * 0.1;
+		if (dtime < 0.0) dtime = -dtime;
+		dtime += 200.0;
+		if (dtime > 20000.0) dtime = 20000.0;
+		if (dtime == 0.0) glob.positions_per_msec;
+		else glob.positions_per_msec = (glob.position - lastPosition) / dtime;
+	}
+	if ((glob.remote_status & TSTATE_SEEK) && (glob.position == 0)) {
+		glob.position = lastPosition;
+		glob.position += glob.positions_per_msec * glob.delta_t;
+		printf("REWINDING, position=%d\n", glob.position);
+	}
 		
 	// calculate current tape radius for both reels
 	// note: this is NOT a linear relation!
@@ -219,12 +250,10 @@ static void do_logic()
 	double f0square = (MIN_TRADIUS / MAX_TRADIUS) * (MIN_TRADIUS / MAX_TRADIUS);
 	double f1 = sqrt(((double)glob.position / CAPACITY) * (1.0 - f0square) + f0square);
 	double f2 = sqrt(((CAPACITY - (double)glob.position) / CAPACITY) * (1.0 - f0square) + f0square);	
-	if (glob.last_remote_status != glob.remote_status)
-		printf("***** Remote state=0x%02x, pos=%d, f1=%0.3f\n", glob.remote_status, glob.position, f1);
+
 	glob.radius1 = f1 * MAX_TRADIUS;
 	glob.radius2 = f2 * MAX_TRADIUS;
-	if ((glob.remote_status & TSTATE_SEEK) && (glob.position == 0))
-		printf("REWINDING\n");
+
 	
 	// calculate requested reel speeds based on position	
 	if ((glob.remote_status & TSTATE_WRITE) || (glob.remote_status & TSTATE_READ) || (glob.remote_status & TSTATE_SEEK)) {
@@ -253,7 +282,8 @@ static void do_logic()
 		
 	glob.delta_vc2 *= 0.9;
 	if (glob.delta_vc2 > MAX_DVC2) glob.delta_vc2 = MAX_DVC2;
-	if (glob.delta_vc2 < -MAX_DVC2) glob.delta_vc2 = -MAX_DVC2;	
+	if (glob.delta_vc2 < -MAX_DVC2) glob.delta_vc2 = -MAX_DVC2;
+	if ((glob.actual_speed2 == 0) && (glob.requested_speed2 == 0)) glob.delta_vc2 = 0.0;	
 	
 	if ((glob.delta_vc1) || (glob.delta_vc1))
 		printf("**dvc1=%0.0f, dvc2=%0.0f\n", glob.delta_vc1, glob.delta_vc2);
@@ -438,6 +468,9 @@ int main(int argc, char *argv[])
 		sprintf(s,"Reel1-0%dbl.png",i);
 		glob.reel1bl[i] = readpng(s);
 	}
+	glob.capstan   = readpng("capstan.png");
+	glob.capstanb[0] = readpng("capstanb1.png");
+	glob.capstanb[1] = readpng("capstanb2.png");
 
 	gtk_init(&argc, &argv);
 
