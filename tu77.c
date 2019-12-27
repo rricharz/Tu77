@@ -24,6 +24,13 @@
  * 
  * 
  */
+ 
+#define BORDER 80       // we need to make an educated guess to make sure that the full vertical
+                        // space is used if required
+                        // if BORDER is too small, we might end up with a too large window
+                        // if BORDER is too large, the decorated window will be smaller than possible
+                        // with a reasonable size BORDER, both are acceptable
+                        // ideally, one could force the window manager to use a certain aspect ratio
 
 #define TSTATE_ONLINE		1
 #define TSTATE_DRIVE1		2
@@ -79,11 +86,12 @@
 struct {
   cairo_surface_t *image;
   cairo_surface_t *reel1[NUMANGLES], *reel1bl[NUMANGLES];
+  cairo_surface_t *hub[NUMANGLES], *hubb[NUMANGLES];
   cairo_surface_t *capstan, *capstanb[2];
   double scale;
   double delta_t;
   int remote_status, last_remote_status;
-  int argFullscreen, argAudio;
+  int argFullscreen, argFullv;
   double requested_speed1, actual_speed1, requested_speed2, actual_speed2;
   double angle1, angle2;
   double radius1, radius2;
@@ -151,8 +159,7 @@ static void do_drawing(cairo_t *cr)
 	
 	cairo_scale(cr,glob.scale,glob.scale);
 		
-	printf("dt=%0.0f, da1=%0.0f, da2=%0.0f\n",
-		glob.delta_t, delta_angle1, delta_angle2);
+	// printf("dt=%0.0f, da1=%0.0f, da2=%0.0f\n", glob.delta_t, delta_angle1, delta_angle2);
 
 	// draw the drive
 	cairo_set_source_surface(cr, glob.image, 0, 0);
@@ -168,7 +175,7 @@ static void do_drawing(cairo_t *cr)
 	
 	// draw the reels
 	int index1 = glob.angle1 * NUMANGLES / 360;
-	int index2 = NUMANGLES - (glob.angle2 * NUMANGLES / 360) - 1;
+	int index2 = glob.angle2 * NUMANGLES / 360;
 	if (glob.actual_speed1 != 0) {	
 		cairo_set_source_surface(cr, glob.reel1bl[index1], REEL1X, REEL1Y);
 		cairo_paint(cr);
@@ -183,6 +190,17 @@ static void do_drawing(cairo_t *cr)
 	}
 	else {
 		cairo_set_source_surface(cr, glob.reel1[index2], REEL2X, REEL2Y);
+		cairo_paint(cr);
+	}
+	
+	// draw the hub
+	
+	if (glob.actual_speed2 != 0) {	
+		cairo_set_source_surface(cr, glob.hubb[index2], REEL2X + 104, REEL2Y + 104);
+		cairo_paint(cr);
+	}
+	else {
+		cairo_set_source_surface(cr, glob.hub[index2], REEL2X + 104, REEL2Y + 104);
 		cairo_paint(cr);
 	}
 	
@@ -235,7 +253,7 @@ static void do_logic()
 		dtime += 200.0;
 		if (dtime > 20000.0) dtime = 20000.0;
 		if (dtime == 0.0) glob.positions_per_msec;
-		else glob.positions_per_msec = (glob.position - lastPosition) / dtime;
+		else glob.positions_per_msec = (glob.position - lastPosition) / dtime; 
 	}
 	if ((glob.remote_status & TSTATE_SEEK) && (glob.position == 0)) {
 		glob.position = lastPosition;
@@ -274,6 +292,7 @@ static void do_logic()
 	glob.delta_vc1 += SCALE_VC * (glob.requested_speed1 - glob.actual_speed1) * glob.delta_t / TIME_INTERVAL;
 		
 	glob.delta_vc1 *= 0.9;
+	if (glob.actual_speed1 != 0) glob.delta_vc1 += (rand() & 7) - 4; // sligh jitter
 	if (glob.delta_vc1 > MAX_DVC1) glob.delta_vc1 = MAX_DVC1;
 	if (glob.delta_vc1 < -MAX_DVC1) glob.delta_vc1 = -MAX_DVC1;	
 	if ((glob.actual_speed1 == 0) && (glob.requested_speed1 == 0)) glob.delta_vc1 = 0.0;
@@ -281,12 +300,14 @@ static void do_logic()
 	glob.delta_vc2 -= SCALE_VC * (glob.requested_speed2 - glob.actual_speed2) * glob.delta_t / TIME_INTERVAL;
 		
 	glob.delta_vc2 *= 0.9;
+	if (glob.actual_speed2 != 0) glob.delta_vc2 += (rand() & 7) - 4; // sligh jitter
 	if (glob.delta_vc2 > MAX_DVC2) glob.delta_vc2 = MAX_DVC2;
 	if (glob.delta_vc2 < -MAX_DVC2) glob.delta_vc2 = -MAX_DVC2;
-	if ((glob.actual_speed2 == 0) && (glob.requested_speed2 == 0)) glob.delta_vc2 = 0.0;	
+	if ((glob.actual_speed2 == 0) && (glob.requested_speed2 == 0)) glob.delta_vc2 = 0.0;
 	
-	if ((glob.delta_vc1) || (glob.delta_vc1))
-		printf("**dvc1=%0.0f, dvc2=%0.0f\n", glob.delta_vc1, glob.delta_vc2);
+	
+	// if ((glob.delta_vc1) || (glob.delta_vc1))
+	//	printf("**dvc1=%0.0f, dvc2=%0.0f\n", glob.delta_vc1, glob.delta_vc2);
 	
 	// Linear acceleration based on speed differences
 	// Vacuum column deltas are the integrals of the speed differences
@@ -425,9 +446,12 @@ int main(int argc, char *argv[])
 {
 	GtkWidget *window;
 	GtkWidget *darea;
+	
+	// initialize random number generator (rand)
+	srand((unsigned)time(NULL));	
   
 	glob.argFullscreen = 0;
-	glob.argAudio = 0;
+	glob.argFullv = 0;
 	int firstArg = 1;
   
 	char s[32];
@@ -439,8 +463,8 @@ int main(int argc, char *argv[])
 	while (firstArg < argc) {
 		if (strcmp(argv[firstArg],"-full") == 0)
 			glob.argFullscreen = 1;
-		else if (strcmp(argv[firstArg],"-audio") == 0)
-			glob.argAudio = 1;            
+		else if (strcmp(argv[firstArg],"-fullv") == 0)
+			glob.argFullv = 1;            
 	else {
         printf("tu77: unknown argument %s\n", argv[firstArg]);
         exit(1);
@@ -467,6 +491,10 @@ int main(int argc, char *argv[])
 		glob.reel1[i] = readpng(s);
 		sprintf(s,"Reel1-0%dbl.png",i);
 		glob.reel1bl[i] = readpng(s);
+		sprintf(s,"hub%d.png",i);
+		glob.hub[i] = readpng(s);
+		sprintf(s,"hub%db.png",i);
+		glob.hubb[i] = readpng(s);
 	}
 	glob.capstan   = readpng("capstan.png");
 	glob.capstanb[0] = readpng("capstanb1.png");
@@ -504,6 +532,13 @@ int main(int argc, char *argv[])
 		gtk_window_fullscreen(GTK_WINDOW(window));
 		gtk_window_set_keep_above(GTK_WINDOW(window), FALSE);
 		glob.scale = screenHeight / 1080.0;
+	}
+	else if (glob.argFullv) {
+		gtk_window_set_decorated(GTK_WINDOW(window), TRUE);
+		int v = screenHeight - BORDER;
+		int h = (int)((double)v * 0.9815);
+		gtk_window_set_default_size(GTK_WINDOW(window), h, v);
+		glob.scale = (double)h / 1080.0;  		
 	}
  
 	else {
