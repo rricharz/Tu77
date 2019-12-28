@@ -77,11 +77,12 @@
 #define NUMANGLES		10		// number of angles simulated
 #define CAPACITY		2000000		// 2 Mbyte for now (need better value)
 #define MIN_TRADIUS		100.0		// tape radius in dots
-#define MAX_TRADIUS		190.0		// tape radiusin dots
-#define FULL_RPS		4.5		// in turns per second
+#define MAX_TRADIUS		190.0		// tape radius in dots
+#define FULL_RPS		4.44		// in turns per second
 #define MAX_DVC1		260		// maximal delta vacuum column 1 in dots
 #define MAX_DVC2		230		// maximal delta vacuum column 2 in dots
-#define SCALE_VC		3.0		// scaling for vacuum column
+#define SCALE_VC		2.0		// scaling for vacuum column
+#define ACCELERATION		1.0		// adjust accelation 
 
 struct {
   cairo_surface_t *image;
@@ -91,13 +92,14 @@ struct {
   double scale;
   double delta_t;
   int remote_status, last_remote_status;
-  int argFullscreen, argFullv;
+  int argFullscreen, argFullv, argUnit1;
   double requested_speed1, actual_speed1, requested_speed2, actual_speed2;
   double angle1, angle2;
   double radius1, radius2;
   double delta_vc1, delta_vc2;
   int position;
   double positions_per_msec;
+  long tms;
 } glob;
 
 long d_mSeconds()
@@ -107,11 +109,11 @@ long d_mSeconds()
         static long lastTime;
         struct timeval tv;
         gettimeofday(&tv,NULL);
-        long t = (1000 * tv.tv_sec)  + (tv.tv_usec/1000);
-        if (!initialized) lastTime = t;
+        glob.tms = (1000 * tv.tv_sec)  + (tv.tv_usec/1000);
+        if (!initialized) lastTime = glob.tms;
         initialized = 1;
-        long t1 = t - lastTime;
-        lastTime = t;     
+        long t1 = glob.tms - lastTime;
+        lastTime = glob.tms;     
         return t1;
 }
 
@@ -244,10 +246,22 @@ static void do_logic()
 {	
 	int lastPosition = glob.position;
 	glob.remote_status = getStatus();
+	
+	if (glob.argUnit1 && ((glob.remote_status & TSTATE_DRIVE1) == 0)) return;
+	if ((!glob.argUnit1) && ((glob.remote_status & TSTATE_DRIVE1) != 0)) return;
+	
 	glob.delta_t = (double)d_mSeconds();
 	
 	if (glob.last_remote_status != glob.remote_status) {
-		printf("***** Remote state=0x%02x, pos=%d\n", glob.remote_status, glob.position);
+		printf("*** SimH driver state=0x%02x(%c%c%c%c%c%c), target pos=%d\n",
+		glob.remote_status,
+		((glob.remote_status & TSTATE_ONLINE)? 'O':'-'),
+		((glob.remote_status & TSTATE_WRITE)? 'W':'-'),
+		((glob.remote_status & TSTATE_READ)? 'R':'-'),
+		((glob.remote_status & TSTATE_SEEK)? 'S':'-'),
+		((glob.remote_status & TSTATE_BACKWARDS)? '<':'>'),
+		((glob.remote_status & TSTATE_DRIVE1)? '2':'1'),
+		glob.position);
 		double dtime = (glob.position - lastPosition) * 0.1;
 		if (dtime < 0.0) dtime = -dtime;
 		dtime += 200.0;
@@ -263,6 +277,7 @@ static void do_logic()
 		
 	// calculate current tape radius for both reels
 	// note: this is NOT a linear relation!
+	
 	if (glob.position < 0) glob.position = 0;
 	if (glob.position > CAPACITY) glob.position = CAPACITY;
 	double f0square = (MIN_TRADIUS / MAX_TRADIUS) * (MIN_TRADIUS / MAX_TRADIUS);
@@ -271,11 +286,11 @@ static void do_logic()
 
 	glob.radius1 = f1 * MAX_TRADIUS;
 	glob.radius2 = f2 * MAX_TRADIUS;
-
 	
-	// calculate requested reel speeds based on position	
+	// calculate requested reel speeds based on position
+	
 	if ((glob.remote_status & TSTATE_WRITE) || (glob.remote_status & TSTATE_READ) || (glob.remote_status & TSTATE_SEEK)) {
-		glob.requested_speed1 = (int)(FULL_RPS * MAX_TRADIUS / glob.radius1 + 0.5); // rps
+		glob.requested_speed1 = (int)(FULL_RPS * MAX_TRADIUS / glob.radius1 + 0.5);
 		glob.requested_speed2 = (int)(FULL_RPS * MAX_TRADIUS / glob.radius2 + 0.5); 
 	}
 	else {
@@ -290,21 +305,18 @@ static void do_logic()
 	// Calculate the actual vacuum column deltas, based on speed differences
 	
 	glob.delta_vc1 += SCALE_VC * (glob.requested_speed1 - glob.actual_speed1) * glob.delta_t / TIME_INTERVAL;
-		
-	glob.delta_vc1 *= 0.9;
-	if (glob.actual_speed1 != 0) glob.delta_vc1 += (rand() & 7) - 4; // sligh jitter
+	if (fabs(glob.requested_speed1 - glob.actual_speed1) < ACCELERATION) // move towards center
+		glob.delta_vc1 *= 0.9;
+	if (glob.actual_speed1 != 0.0) glob.delta_vc1 += (rand() & 7) - 4; // sligh jitter
 	if (glob.delta_vc1 > MAX_DVC1) glob.delta_vc1 = MAX_DVC1;
 	if (glob.delta_vc1 < -MAX_DVC1) glob.delta_vc1 = -MAX_DVC1;	
-	if ((glob.actual_speed1 == 0) && (glob.requested_speed1 == 0)) glob.delta_vc1 = 0.0;
 	
-	glob.delta_vc2 -= SCALE_VC * (glob.requested_speed2 - glob.actual_speed2) * glob.delta_t / TIME_INTERVAL;
-		
-	glob.delta_vc2 *= 0.9;
-	if (glob.actual_speed2 != 0) glob.delta_vc2 += (rand() & 7) - 4; // sligh jitter
+	glob.delta_vc2 -= SCALE_VC * (glob.requested_speed2 - glob.actual_speed2) * glob.delta_t / TIME_INTERVAL;		
+	if (fabs(glob.requested_speed1 - glob.actual_speed1) < ACCELERATION) // move towards center
+		glob.delta_vc2 *= 0.9;
+	if (glob.actual_speed2 != 0.0) glob.delta_vc2 += (rand() & 7) - 4; // sligh jitter
 	if (glob.delta_vc2 > MAX_DVC2) glob.delta_vc2 = MAX_DVC2;
 	if (glob.delta_vc2 < -MAX_DVC2) glob.delta_vc2 = -MAX_DVC2;
-	if ((glob.actual_speed2 == 0) && (glob.requested_speed2 == 0)) glob.delta_vc2 = 0.0;
-	
 	
 	// if ((glob.delta_vc1) || (glob.delta_vc1))
 	//	printf("**dvc1=%0.0f, dvc2=%0.0f\n", glob.delta_vc1, glob.delta_vc2);
@@ -314,10 +326,15 @@ static void do_logic()
 	// Differentiating these again could have been used here,
 	// but the same effect can be obtained by using the speed differences directly
 	
-	if (glob.actual_speed1 > glob.requested_speed1) glob.actual_speed1 -= 0.5;
-	if (glob.actual_speed1 < glob.requested_speed1) glob.actual_speed1 += 0.5;	
-	if (glob.actual_speed2 > glob.requested_speed2) glob.actual_speed2 -= 0.5;
-	if (glob.actual_speed2 < glob.requested_speed2) glob.actual_speed2 += 0.5;	
+	if (glob.actual_speed1 > glob.requested_speed1) glob.actual_speed1 -= ACCELERATION;
+	if (glob.actual_speed1 < glob.requested_speed1) glob.actual_speed1 += ACCELERATION;	
+	if (glob.actual_speed2 > glob.requested_speed2) glob.actual_speed2 -= ACCELERATION;
+	if (glob.actual_speed2 < glob.requested_speed2) glob.actual_speed2 += ACCELERATION;
+	
+	// make sure that the reels stop completely
+	
+	if (fabs(glob.actual_speed1) < ACCELERATION) glob.actual_speed1 = 0.0;
+	if (fabs(glob.actual_speed2) < ACCELERATION) glob.actual_speed2 = 0.0;	
 
 	glob.last_remote_status = glob.remote_status;
 }
@@ -334,8 +351,8 @@ static gboolean on_timer_event(GtkWidget *widget)
 	}
 	else if (moving) { // draw the reels once more when moving stops
 		gtk_widget_queue_draw(widget);
-		glob.delta_vc1 = 0.0;
-		glob.delta_vc2 = 0.0;
+		// glob.delta_vc1 = 0.0;
+		// glob.delta_vc2 = 0.0;
 		moving = 0;
 	}
 	return TRUE;
@@ -452,6 +469,7 @@ int main(int argc, char *argv[])
   
 	glob.argFullscreen = 0;
 	glob.argFullv = 0;
+	glob.argUnit1 = 0;
 	int firstArg = 1;
   
 	char s[32];
@@ -464,9 +482,11 @@ int main(int argc, char *argv[])
 		if (strcmp(argv[firstArg],"-full") == 0)
 			glob.argFullscreen = 1;
 		else if (strcmp(argv[firstArg],"-fullv") == 0)
-			glob.argFullv = 1;            
-	else {
-        printf("tu77: unknown argument %s\n", argv[firstArg]);
+			glob.argFullv = 1;  
+		else if (strcmp(argv[firstArg],"-unit1") == 0)
+			glob.argUnit1 = 1;            
+		else {
+		printf("tu77: unknown argument %s\n", argv[firstArg]);
         exit(1);
 	}
 	firstArg++;
