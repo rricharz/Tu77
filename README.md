@@ -1,26 +1,26 @@
-# tu77: TU 77 vacuum column magnetic tape drive front panel emulator
+# tu77: TU77 magnetic tape front panel emulator
 
-Simulation of a TU 77 magnetic tape front panel for SimH (PDP-11). The simulation shows an
-open TE-16 at the moment. It will be replaced with a TU-77 once I have a good image of a TU-77.
-The TU-77 did of course only work properly if the vacuum columns were closed, but it is much
-more intereesting to see how the tape moves in the open columns.
+Simulation of a TU77 magnetic tape front panel for SimH (PDP-11). The simulation shows an
+open TE16 at the moment. It will be replaced with a TU77 once I have a good image of a TU77.
+The TU77 did of course only work properly if the vacuum columns were closed, but it is much
+more intereesting to see how the tape moves in the open vacuum columns.
 
 Vacuum column tape drives are described on
 [Wikipedia - nine track tapes](https://en.wikipedia.org/wiki/9_track_tape)
 
 For the Raspberry Pi and other Linux systems.
 
-This [video of tu77 demo](https://youtu.be/Ye_s0w6C970) shows a slightly outdated version
+This [video of TU77 demo](https://youtu.be/Ye_s0w6C970) shows a slightly outdated version
 of tu77 in action on a PiDP-11.
 
-The TU 57 magnetic tape unit had a very fast tape transportation speed for reads and writes of
+The TU77 magnetic tape unit had a very fast tape transportation speed for reads and writes of
 3.2 m/s, and a rotation speed of the reels of up to 500 rpm.
 
 A driver to use tu77 with the PiDP-11 is included.
 
 **Hardware requirements**
 
-This TU 77 simulator has been tested on the PiDP-11 using a Raspberry Pi 4B.
+This TU77 simulator has been tested on the PiDP-11 using a Raspberry Pi 4B.
 A considerable effort has been made to reduce the CPU usage to acceptable levels. It
 should therefore also work on Raspberry PI 3B  and Raspberry Pi 3B+ models. Please send
 your positive or negative feedback on using tu77 on Raspberry Pi 3 models to
@@ -78,9 +78,9 @@ especially useful in full screen mode where no close window button is available.
 
 **Demo of tape write**
 
-There is a small demo program which demonstates reading from unit 0 0. It is also
+There is a small demo program which demonstates reading from tape. It is also
 a test for the communication between a simulated "host" (the demo program in this case)
-and tu57.
+and tu77.
 
 Start tu77 in background (with the &) using
 
@@ -88,22 +88,22 @@ Start tu77 in background (with the &) using
   ./tu77 &
 ```
  
-Make sure that both right switches are in the "remote" position (this is the default).
-Then start the demo program with
+Start the demo program with
 
 ```
   sudo ./demo
 ```
  
-Sudo might be required if SimH has written to the status byte file before. There is currently no 2 way communication back from the panel to the "host". Therefore, at the moment the demo
-just flips the left button to the write enable position if required. But the the right buttons need
-to be in the remote position. Otherwise the panel does not listen to a "host".
+Sudo might be required if SimH has written to the status byte file before.
 
 If you abort the demo program while it's running you might end up with reels spinning forever. Just use
 
 ```
- sudo rm /tmp/tu77status
+ sudo rm /tmp/tu56status
 ```
+
+Note: The status file is called tu56status, because it works both for my tu56 magtape
+front panel emulator and my tu56 DECtape front panel emulator.
  
 in this case, or start the demo program again and let it go through the complete demo.
 
@@ -113,7 +113,7 @@ in this case, or start the demo program again and let it go through the complete
 A slightly modified tape driver needs to be installed in SimH. This driver writes the necessary
 status bits into a little status file, where it can be read by tu77.
 
-There is currently only one driver for the PDP-11 available:
+There is currently only a driver for the PDP-11 available:
 
  - magtape driver for the PiDP-11
 
@@ -133,9 +133,9 @@ tu77 has the following options:
 	-fullv          start tu77 in a decorated window using the maximal vertical space
 			available.
 
-	-unit1		attach to tape unit 1 instead of 0
+	-unit1		attach to tape unit 1 instead of unit 0
 
-	-label "text"	show a label on the removeable reel with the specified text
+	-label "text"	show a blue label on the removeable reel with the specified text
 
 
 **Versions**
@@ -145,7 +145,9 @@ See [versions](versions.txt)
 
 **Contributors**
 
-(Sorry, not yet ready)
+Johnny Billquist, Neal G., Terry Kennedy and Jonathan Morton have helped to understand
+vacuum magnet tape motions. The picture of the open TE16 has been obtained from
+https://commons.wikimedia.org/wiki/File:9-track-drive-open.jpg#mw-jump-to-license.
 
 
 **The usual disclaimer**
