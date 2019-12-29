@@ -102,10 +102,8 @@ If you abort the demo program while it's running you might end up with reels spi
  sudo rm /tmp/tu56status
 ```
 
-Note: The status file is called tu56status, because it works both for my tu56 magtape
-front panel emulator and my tu56 DECtape front panel emulator.
- 
-in this case, or start the demo program again and let it go through the complete demo.
+Note: The status file is called tu56status, because it works both for the tu77 magtape
+front panel emulator and the tu56 DECtape front panel emulator.
 
 
 **Installing the proper driver in SimH**
