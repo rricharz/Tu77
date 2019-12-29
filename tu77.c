@@ -100,6 +100,7 @@ struct {
   int position;
   double positions_per_msec;
   long tms;
+  char *label;
 } glob;
 
 long d_mSeconds()
@@ -238,7 +239,49 @@ static void do_drawing(cairo_t *cr)
 	cairo_arc(cr, VC2X, VC2Y + glob.delta_vc2, VC2R, 0.0, M_PI);
 	cairo_line_to(cr, VC2X - VC2R, VC2TOPL);
 	cairo_stroke(cr);
-		
+	
+	// draw a label onto the removable reel
+
+#define LABELW 120
+#define LABELH 20
+#define LABELP 135
+
+	cairo_text_extents_t extent;
+	
+	if (glob.label[0] != 0) {
+
+		if (glob.actual_speed2 != 0) {
+			lw = LABELH * 1.2;
+			cairo_set_line_width(cr, lw);
+			cairo_set_source_rgba(cr, 0.3, 0.3, 0.8,0.08);
+			cairo_arc(cr, REEL2X  + w / 2, REEL2Y + h / 2, LABELP - LABELH / 2.0,
+				(-80.0 +index2 * 36.0) * M_PI / 180.0,
+				(80.0 + index2 * 36.0) * M_PI / 180.0);
+			cairo_set_source_rgba(cr, 0.3, 0.3, 0.8,0.15);
+			cairo_stroke(cr);
+			cairo_arc(cr, REEL2X  + w / 2, REEL2Y + h / 2, LABELP - LABELH / 2.0,
+				(-50.0 +index2 * 36.0) * M_PI / 180.0,
+				(50.0 + index2 * 36.0) * M_PI / 180.0);
+			cairo_stroke(cr);
+		}
+		else {	
+			cairo_set_source_rgb(cr, 0.3, 0.3, 0.8);
+			cairo_set_line_width (cr, 2);
+			cairo_translate(cr, REEL2X  + w / 2 , REEL2Y + h / 2);
+			cairo_rotate(cr, (index2 * 36.0) * M_PI / 180.0);
+			cairo_rectangle (cr,  -LABELW / 2 , - LABELP, LABELW, LABELH);
+			cairo_stroke_preserve(cr);
+			cairo_fill(cr);
+			cairo_set_source_rgb(cr, 0.0, 0.0, 0.0);
+			cairo_select_font_face(cr, "Purisa", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
+			cairo_set_font_size(cr, 12);
+			cairo_text_extents(cr, glob.label, &extent);
+			// printf("extent: %0.0f,%0.0f\n", extent.width, extent.height);
+			cairo_move_to(cr, - extent.width / 2.0, - LABELP + (LABELH + extent.height) / 2.0);
+			cairo_show_text(cr, glob.label);
+			cairo_stroke (cr);
+		}
+	}		
 }
 
 static void do_logic()
@@ -471,6 +514,8 @@ int main(int argc, char *argv[])
 	glob.argFullv = 0;
 	glob.argUnit1 = 0;
 	int firstArg = 1;
+	
+	glob.label = "";
   
 	char s[32];
   
@@ -484,11 +529,16 @@ int main(int argc, char *argv[])
 		else if (strcmp(argv[firstArg],"-fullv") == 0)
 			glob.argFullv = 1;  
 		else if (strcmp(argv[firstArg],"-unit1") == 0)
-			glob.argUnit1 = 1;            
+			glob.argUnit1 = 1; 
+		else if (strcmp(argv[firstArg],"-label") == 0) {
+			if (firstArg + 1 < argc) {
+				glob.label = argv[firstArg++ + 1];
+			}	
+		}           
 		else {
 		printf("tu77: unknown argument %s\n", argv[firstArg]);
-        exit(1);
-	}
+		exit(1);
+		}
 	firstArg++;
 	}
   
