@@ -1,0 +1,36 @@
+
+Using tu77 with SimH on the PiDP-11, running 2.11 BSD
+*****************************************************
+
+First, install the modified TQ driver in SimH as follows. It's a good idea to make a
+backup copy of /opt/pidp11 before doing that, in case something goes wrong.
+
+  cd 
+  cd Tu77/simh/pdp11_magtape_driver
+  chmod +x install
+  ./install
+
+Building a new version of SimH with install will take a while, especially on slower
+Raspberry Pimodels. The new TQ driver adds realistic timing and generates a status
+byte in /tmp/tu56status, which can be used by tu77.
+
+If you want to go back to the original driver, type
+
+  cd 
+  cd tu77/simh/pdp11_magtape_driver
+  chmod +x uninstall
+  ./uninstall
+
+You have to restart simh after installing the new driver. The easiest way to do this
+is to restart your Raspberry Pi.
+
+Also, don't forget to enable the TQ driver in your boot.ini, see
+https://github.com/rricharz/pidp11-2.11bsd.git.
+You have to restart 2.11 BSD after changing boot.ini.
+
+Now you are ready to use the tu77 front panel with the PiDP-11. Just start the front
+panel at any time. It does not matter whether this is done before or after SimH and
+BSD are started. Boot to 2.11 BSD, and use commands like "tar cv filename" or
+"tar xv filename" to see the tape in action. It is much more fun to use "tar" if you
+can see the tape in action.
+

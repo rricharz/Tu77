@@ -394,8 +394,6 @@ static gboolean on_timer_event(GtkWidget *widget)
 	}
 	else if (moving) { // draw the reels once more when moving stops
 		gtk_widget_queue_draw(widget);
-		// glob.delta_vc1 = 0.0;
-		// glob.delta_vc2 = 0.0;
 		moving = 0;
 	}
 	return TRUE;
@@ -406,6 +404,7 @@ static gboolean on_button_release_event(GtkWidget *widget, GdkEventButton *event
 {
 	// event-button = 1: means left mouse button; button = 3 means right mouse button    
 	// printf("on_button_release_event called, button %d, x = %d, y= %d\n", (int)event->button, (int)event->x, (int)event->y);
+
 	int x = (int)((double)event->x / glob.scale);
 	int y = (int)((double)event->y / glob.scale);
 
@@ -519,9 +518,7 @@ int main(int argc, char *argv[])
   
 	char s[32];
   
-	printf("tu77 version 0.1\n");
-  
-	system("pkill mpg321");
+	printf("tu77 version 0.2\n");
   
 	while (firstArg < argc) {
 		if (strcmp(argv[firstArg],"-full") == 0)
@@ -557,18 +554,18 @@ int main(int argc, char *argv[])
   
 	glob.image     = readpng("Te16-open.png");
 	for (int i = 0; i < NUMANGLES; i++) {
-		sprintf(s,"Reel1-0%d.png",i);
+		sprintf(s,"reels/Reel1-0%d.png",i);
 		glob.reel1[i] = readpng(s);
-		sprintf(s,"Reel1-0%dbl.png",i);
+		sprintf(s,"reels/Reel1-0%dbl.png",i);
 		glob.reel1bl[i] = readpng(s);
-		sprintf(s,"hub%d.png",i);
+		sprintf(s,"reels/hub%d.png",i);
 		glob.hub[i] = readpng(s);
-		sprintf(s,"hub%db.png",i);
+		sprintf(s,"reels/hub%db.png",i);
 		glob.hubb[i] = readpng(s);
 	}
-	glob.capstan   = readpng("capstan.png");
-	glob.capstanb[0] = readpng("capstanb1.png");
-	glob.capstanb[1] = readpng("capstanb2.png");
+	glob.capstan   = readpng("reels/capstan.png");
+	glob.capstanb[0] = readpng("reels/capstanb1.png");
+	glob.capstanb[1] = readpng("reels/capstanb2.png");
 
 	gtk_init(&argc, &argv);
 

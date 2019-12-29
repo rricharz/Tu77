@@ -60,7 +60,6 @@ void setStatus(int status, long position)
 int main(int argc, char **argv)
 {	
 	long pos;
-	system("pkill mpg321");
 	pos = 0;
 	setStatus(0, 0);
 	for (int i = 1; i < 100; i++) {
