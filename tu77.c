@@ -73,6 +73,21 @@
 #define VC1TOPR			850
 #define VC2TOPL			163
 #define VC2TOPR			163
+#define BUTTONX			(194 + glob.xoffset)
+#define BUTTONY			539
+#define BUTTONSIZE		21
+#define BUTTONOFFSET		41
+#define NUM_BUTTONS		4
+#define LABELW			120
+#define LABELH			20
+#define LABELP			135
+#define LED_ONLINE_X		(267 + glob.xoffset)
+#define LED_ONLINE_Y		515
+#define LED_POWER_X		(161 + glob.xoffset)
+#define LED_POWER_Y		515
+#define LED_BOT_X		(208 + glob.xoffset)
+#define LED_BOT_Y		515
+#define LED_RADIUS		5
 
 #define NUMWHEELS		3
 int wheelx[NUMWHEELS] = {666, 718, 590};
@@ -85,7 +100,7 @@ int wheely[NUMWHEELS] = {128, 128, 395};
 #define FULL_RPS		4.44		// in turns per second
 #define MAX_DVC1		300		// maximal delta vacuum column 1 in dots
 #define MAX_DVC2		350		// maximal delta vacuum column 2 in dots
-#define SCALE_VC		2.0		// scaling for vacuum column
+#define SCALE_VC		2.2		// scaling for vacuum column
 #define ACCELERATION		1.0		// adjust accelation 
 
 struct {
@@ -107,6 +122,7 @@ struct {
   long tms;
   char *label;
   int xoffset;
+  int buttonState[NUM_BUTTONS];
 } glob;
 
 long d_mSeconds()
@@ -183,13 +199,14 @@ static void do_drawing(cairo_t *cr)
 	if (glob.requested_speed1 != 0.0) {
 		for (int i = 0; i < NUMWHEELS; i++) {
 			cairo_set_source_surface(cr, glob.wheelb[capstan_index],
-				wheelx[i], wheely[i]);
+				wheelx[i] + glob.xoffset, wheely[i]);
 			cairo_paint(cr);
 		}
 	}
 	else {	
 		for (int i = 0; i < NUMWHEELS; i++) {
-			cairo_set_source_surface(cr, glob.wheel, wheelx[i], wheely[i]);
+			cairo_set_source_surface(cr, glob.wheel,
+				wheelx[i] + glob.xoffset, wheely[i]);
 			cairo_paint(cr);
 		}
 	}
@@ -254,11 +271,23 @@ static void do_drawing(cairo_t *cr)
 	cairo_arc(cr, VC2X, VC2Y + glob.delta_vc2, VC2R, 0.1 * M_PI, 0.9 * M_PI);
 	cairo_stroke(cr);
 	
+		// draw the red leds
+	
+	cairo_set_source_rgb(cr, 1.0, 0.0, 0.0);
+	cairo_set_line_width(cr, 1);
+	cairo_arc(cr, LED_POWER_X, LED_POWER_Y, LED_RADIUS, 0.0, 2.0 * M_PI);
+	cairo_fill(cr);
+	
+	if (glob.buttonState[1]) {
+		cairo_arc(cr, LED_ONLINE_X, LED_ONLINE_Y, LED_RADIUS, 0.0, 2.0 * M_PI);
+		cairo_fill(cr);
+	}
+	if (glob.position == 0) {
+		cairo_arc(cr, LED_BOT_X, LED_BOT_Y, LED_RADIUS, 0.0, 2.0 * M_PI);
+		cairo_fill(cr);
+	}	
+	
 	// draw a label onto the removable reel
-
-#define LABELW 120
-#define LABELH 20
-#define LABELP 135
 
 	cairo_text_extents_t extent;
 	
@@ -295,14 +324,17 @@ static void do_drawing(cairo_t *cr)
 			cairo_show_text(cr, glob.label);
 			cairo_stroke (cr);
 		}
-	}		
+	}	
 }
 
 static void do_logic()
 // logic and feedback circuit
 {	
 	int lastPosition = glob.position;
-	glob.remote_status = getStatus();
+	if (glob.buttonState[1])
+		glob.remote_status = getStatus();
+	else
+		glob.remote_status = 0;
 	
 	if (glob.argUnit1 && ((glob.remote_status & TSTATE_DRIVE1) == 0)) return;
 	if ((!glob.argUnit1) && ((glob.remote_status & TSTATE_DRIVE1) != 0)) return;
@@ -310,15 +342,15 @@ static void do_logic()
 	glob.delta_t = (double)d_mSeconds();
 	
 	if (glob.last_remote_status != glob.remote_status) {
-		printf("*** SimH driver state=0x%02x(%c%c%c%c%c%c), target pos=%d\n",
-		glob.remote_status,
-		((glob.remote_status & TSTATE_ONLINE)? 'O':'-'),
-		((glob.remote_status & TSTATE_WRITE)? 'W':'-'),
-		((glob.remote_status & TSTATE_READ)? 'R':'-'),
-		((glob.remote_status & TSTATE_SEEK)? 'S':'-'),
-		((glob.remote_status & TSTATE_BACKWARDS)? '<':'>'),
-		((glob.remote_status & TSTATE_DRIVE1)? '2':'1'),
-		glob.position);
+		/* printf("*** SimH driver state=0x%02x(%c%c%c%c%c%c), target pos=%d\n",
+			glob.remote_status,
+			((glob.remote_status & TSTATE_ONLINE)? 'O':'-'),
+			((glob.remote_status & TSTATE_WRITE)? 'W':'-'),
+			((glob.remote_status & TSTATE_READ)? 'R':'-'),
+			((glob.remote_status & TSTATE_SEEK)? 'S':'-'),
+			((glob.remote_status & TSTATE_BACKWARDS)? '<':'>'),
+			((glob.remote_status & TSTATE_DRIVE1)? '2':'1'),
+			glob.position); */
 		double dtime = (glob.position - lastPosition) * 0.1;
 		if (dtime < 0.0) dtime = -dtime;
 		dtime += 200.0;
@@ -414,75 +446,26 @@ static gboolean on_timer_event(GtkWidget *widget)
 
 }
 
-static gboolean on_button_release_event(GtkWidget *widget, GdkEventButton *event, gpointer user_data)
-{
-	// event-button = 1: means left mouse button; button = 3 means right mouse button    
-	// printf("on_button_release_event called, button %d, x = %d, y= %d\n", (int)event->button, (int)event->x, (int)event->y);
-
-	int x = (int)((double)event->x / glob.scale);
-	int y = (int)((double)event->y / glob.scale);
-
-/*
-    if (event->button == 1) {
-		if ((x >= buttonx[1]) && (x <= buttonx[1] + BUTTONXSIZE) &&
-			(y >= buttony[1]) && (y <= buttony[1] + BUTTONYSIZE)) {
-				glob.buttonstate[1] = 0;
-				do_logic();
-				if (glob.argAudio) system("/usr/bin/mpg321 -q sound/switch.mp3 2> /dev/null &");
-				gtk_widget_queue_draw(widget);
-				return TRUE;
-		}
-		if ((x >= buttonx[4]) && (x <= buttonx[4] + BUTTONXSIZE) &&
-			(y >= buttony[4]) && (y <= buttony[4] + BUTTONYSIZE)) {
-				glob.buttonstate[4] = 0;
-				do_logic();
-				if (glob.argAudio) system("/usr/bin/mpg321 -q sound/switch.mp3 2> /dev/null &");
-				gtk_widget_queue_draw(widget);
-				return TRUE;
-		}
-	}
-*/
-}
-
 static gboolean on_button_click_event(GtkWidget *widget, GdkEventButton *event, gpointer user_data)
 {
 	// event-button = 1: means left mouse button; button = 3 means right mouse button    
-    // printf("on_button_click_event called, button %d, x = %d, y= %d\n", (int)event->button, (int)event->x, (int)event->y);
+	// printf("on_button_click_event called, button %d, x = %d, y= %d\n", (int)event->button, (int)event->x, (int)event->y);
     
 	int x = (int)((double)event->x / glob.scale);
 	int y = (int)((double)event->y / glob.scale);
-/*    if (event->button == 1) {
-		for (int i = 0; i < 6; i++) {
-			if ((x >= buttonx[i]) && (x <= buttonx[i] + BUTTONXSIZE) &&
-				(y >= buttony[i]) && (y <= buttony[i] + BUTTONYSIZE)) {
-					
-				if (y <= buttony[i] + (BUTTONYSIZE / 2)) {
-					if (glob.argAudio) system("/usr/bin/mpg321 -q sound/switch.mp3 2> /dev/null &");
-					if ((i == 0) || (i == 3))	// 2 state buttons
-						glob.buttonstate[i] = 1;
-					else if (glob.buttonstate[i] != 0)  // 3 state button
-						glob.buttonstate[i] = 0;
-					else
-						glob.buttonstate[i] = 1;
-						
-				}
-				else {
-					if (glob.argAudio) system("/usr/bin/mpg321 -q sound/switch.mp3 2> /dev/null &");
-					if ((i == 0) || (i == 3))	// 2 state buttons
-					glob.buttonstate[i] = 2;
-					else if (glob.buttonstate[i] != 0)  // 3 state button
-						glob.buttonstate[i] = 0;
-					else
-						glob.buttonstate[i] = 2;
-				}
+	if (event->button == 1) {
+		for (int i = 0; i < NUM_BUTTONS; i++) {
+			if ((x >= BUTTONX + i * BUTTONOFFSET)
+					&& (x <= BUTTONX + i * BUTTONOFFSET + BUTTONSIZE)
+					&& (y >= BUTTONY) && (y <= BUTTONY + BUTTONSIZE)) {
+				glob.buttonState[i] = !glob.buttonState[i];
 				do_logic();
 				gtk_widget_queue_draw(widget);
-				// printf("button state %d: %d\n",i,glob.buttonstate[i]);
+				// printf("button state %d = %d\n",i, glob.buttonState[i]);
 				return TRUE;
 			} 
 		}
 	}
-*/
 	return TRUE;
 }
 
@@ -562,8 +545,9 @@ int main(int argc, char *argv[])
 	glob.angle2 = 100;
 	glob.delta_vc1 = 0;
 	glob.delta_vc2 = 0;
-	glob.radius1 = MIN_TRADIUS + 20;
-	glob.radius2 = MAX_TRADIUS -10;
+	glob.radius1 = MIN_TRADIUS;
+	glob.radius2 = MAX_TRADIUS;
+	glob.position = 0;
 	d_mSeconds(); // initialize delta timer
   
 	glob.image     = readpng("Tu77-open.png");	
@@ -585,6 +569,11 @@ int main(int argc, char *argv[])
 	glob.wheel   = readpng("reels/wheel.png");
 	glob.wheelb[0] = readpng("reels/wheelb1.png");
 	glob.wheelb[1] = readpng("reels/wheelb2.png");
+	
+	glob.buttonState[0] = 0;
+	glob.buttonState[1] = 1;
+	glob.buttonState[2] = 0;
+	glob.buttonState[3] = 0;
 
 	gtk_init(&argc, &argv);
 
@@ -640,7 +629,6 @@ int main(int argc, char *argv[])
 	gtk_window_set_title(GTK_WINDOW(window), "tu77");
   
 	g_signal_connect(G_OBJECT(window), "button-press-event", G_CALLBACK(on_button_click_event), NULL);
-	g_signal_connect(G_OBJECT(window), "button-release-event", G_CALLBACK(on_button_release_event), NULL);
 	g_signal_connect(G_OBJECT(window), "key_press_event", G_CALLBACK(on_key_press), NULL);
   
 	if (TIME_INTERVAL > 0) {

@@ -2,17 +2,16 @@
 
 Simulation of a TU77 magnetic tape front panel for SimH (PDP-11).
 The TU77 did of course only work properly if the vacuum columns were closed, but it is much
-more intereesting to see how the tape moves in the open vacuum columns.
+more interesting to see how the tape moves in the open vacuum columns.
 
 ![tu77 front panel](front.jpg?raw=true "tu77 front panel")
 
 Vacuum column tape drives are described on
-[Wikipedia - nine track tapes](https://en.wikipedia.org/wiki/9_track_tape)
+[Wikipedia - nine track tapes](https://en.wikipedia.org/wiki/9_track_tape).
 
 For the Raspberry Pi and other Linux systems.
 
-This [video of TU77 demo](https://youtu.be/Ye_s0w6C970) shows a slightly outdated version
-of tu77 in action on a PiDP-11.
+This [video of TU77 demo](https://youtu.be/ilRWveCcB44) shows the tu77 in action on a PiDP-11.
 
 The TU77 magnetic tape unit had a very fast tape transportation speed for reads and writes of
 3.2 m/s, and a rotation speed of the reels of up to 500 rpm.
@@ -76,6 +75,11 @@ especially useful in full screen mode where no close window button is available.
  - ESC
  - ctrl-C
  - ctrl-Q
+
+**Buttons**
+
+The only active button is the "ONLINE" button. If you toggle this button in the offline
+position, the online light will turn off and the drive will not listen to SimH anymore.
 
 **Demo of tape write**
 
@@ -153,8 +157,10 @@ See [versions](versions.txt)
 **Contributors**
 
 Johnny Billquist, Neal G., Terry Kennedy and Jonathan Morton have helped to understand
-vacuum magnet tape motions. The picture of the open TE16 has been obtained from
+vacuum magnet tape motions. The pictures of the open TU77 have been obtained from
+Henk Gooijen. The picture of the open TE16 has been obtained from
 https://commons.wikimedia.org/wiki/File:9-track-drive-open.jpg#mw-jump-to-license.
+Thanks to all others who have helped to develop this software.
 
 
 **The usual disclaimer**

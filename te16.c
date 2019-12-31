@@ -299,15 +299,15 @@ static void do_logic()
 	glob.delta_t = (double)d_mSeconds();
 	
 	if (glob.last_remote_status != glob.remote_status) {
-		printf("*** SimH driver state=0x%02x(%c%c%c%c%c%c), target pos=%d\n",
-		glob.remote_status,
-		((glob.remote_status & TSTATE_ONLINE)? 'O':'-'),
-		((glob.remote_status & TSTATE_WRITE)? 'W':'-'),
-		((glob.remote_status & TSTATE_READ)? 'R':'-'),
-		((glob.remote_status & TSTATE_SEEK)? 'S':'-'),
-		((glob.remote_status & TSTATE_BACKWARDS)? '<':'>'),
-		((glob.remote_status & TSTATE_DRIVE1)? '2':'1'),
-		glob.position);
+		/* printf("*** SimH driver state=0x%02x(%c%c%c%c%c%c), target pos=%d\n",
+			glob.remote_status,
+			((glob.remote_status & TSTATE_ONLINE)? 'O':'-'),
+			((glob.remote_status & TSTATE_WRITE)? 'W':'-'),
+			((glob.remote_status & TSTATE_READ)? 'R':'-'),
+			((glob.remote_status & TSTATE_SEEK)? 'S':'-'),
+			((glob.remote_status & TSTATE_BACKWARDS)? '<':'>'),
+			((glob.remote_status & TSTATE_DRIVE1)? '2':'1'),
+			glob.position); */
 		double dtime = (glob.position - lastPosition) * 0.1;
 		if (dtime < 0.0) dtime = -dtime;
 		dtime += 200.0;
