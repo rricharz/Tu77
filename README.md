@@ -1,10 +1,10 @@
-# tu77: TU77 magnetic tape front panel emulator
+# TU77 magnetic tape front panel emulator
 
 Simulation of a TU77 magnetic tape front panel for SimH (PDP-11).
 The TU77 did of course only work properly if the vacuum columns were closed, but it is much
 more intereesting to see how the tape moves in the open vacuum columns.
 
-![tu77 front panel](front.png?raw=true "tu77 front panel")
+![tu77 front panel](front.jpg?raw=true "tu77 front panel")
 
 Vacuum column tape drives are described on
 [Wikipedia - nine track tapes](https://en.wikipedia.org/wiki/9_track_tape)
