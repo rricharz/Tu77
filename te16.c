@@ -1,7 +1,7 @@
 /*
- * tu77.c
+ * te16.c
  *
- * A visual display of the magtape TU77 front panel
+ * A visual display of the magtape TE16 front panel
  * 
  * for the Raspberry Pi and other Linux systems
  * 
@@ -46,7 +46,7 @@
 #include <gtk/gtk.h>
 #include <sys/time.h>
 
-// The TU77 tape status is checked every TIME_INTERVAL milliseconds
+// The TE16 tape status is checked every TIME_INTERVAL milliseconds
 // If the status changes, the display is updated immediately
 //
 // Blurred rotational motion pictures of the reels are only updated
@@ -57,34 +57,30 @@
 
 #define TIME_INTERVAL		40			// timer interval in msec
 
-#define REEL1X			(130 + glob.xoffset)
-#define REEL1Y			577
-#define REEL2X			(150 + glob.xoffset)
-#define REEL2Y			43
-#define VC1X			(717 + glob.xoffset)	// vacuum column 1 x position in dots
-#define VC1Y			600			// vacuum column 1 y position in dots
-#define VC1R			39			// valuum column 1 radius in dots
-#define VC2X			(807 + glob.xoffset)	// vacuum column 1 x position in dots
-#define VC2Y			450			// vacuum column 1 y position in dots
-#define VC2R			39			// valuum column 1 radius in dots
-#define CAPSTANX		(616 + glob.xoffset)
-#define CAPSTANY		836
-#define VC1TOPL			850
-#define VC1TOPR			850
-#define VC2TOPL			163
-#define VC2TOPR			163
-
-#define NUMWHEELS		3
-int wheelx[NUMWHEELS] = {666, 718, 590};
-int wheely[NUMWHEELS] = {128, 128, 395};		
+#define REEL1X			(370 + glob.xoffset)
+#define REEL1Y			98
+#define REEL2X			(365 + glob.xoffset)
+#define REEL2Y			568
+#define VC1X			(149 + glob.xoffset)	// vacuum column 1 x position in dots
+#define VC1Y			450			// vacuum column 1 y position in dots
+#define VC1R			37			// valuum column 1 radius in dots
+#define VC2X			(295 + glob.xoffset)	// vacuum column 1 x position in dots
+#define VC2Y			750			// vacuum column 1 y position in dots
+#define VC2R			36			// valuum column 1 radius in dots
+#define CAPSTANX		(185 + glob.xoffset)
+#define CAPSTANY		105
+#define VC1TOPL			90
+#define VC1TOPR			140
+#define VC2TOPL			530
+#define VC2TOPR			575		
 
 #define NUMANGLES		10		// number of angles simulated
 #define CAPACITY		2000000		// 2 Mbyte for now (need better value)
 #define MIN_TRADIUS		100.0		// tape radius in dots
 #define MAX_TRADIUS		190.0		// tape radius in dots
 #define FULL_RPS		4.44		// in turns per second
-#define MAX_DVC1		300		// maximal delta vacuum column 1 in dots
-#define MAX_DVC2		350		// maximal delta vacuum column 2 in dots
+#define MAX_DVC1		260		// maximal delta vacuum column 1 in dots
+#define MAX_DVC2		230		// maximal delta vacuum column 2 in dots
 #define SCALE_VC		2.0		// scaling for vacuum column
 #define ACCELERATION		1.0		// adjust accelation 
 
@@ -93,7 +89,6 @@ struct {
   cairo_surface_t *reel1[NUMANGLES], *reel1bl[NUMANGLES];
   cairo_surface_t *hub[NUMANGLES], *hubb[NUMANGLES];
   cairo_surface_t *capstan, *capstanb[2];
-  cairo_surface_t *wheel, *wheelb[2];
   double scale;
   double delta_t;
   int remote_status, last_remote_status;
@@ -174,27 +169,15 @@ static void do_drawing(cairo_t *cr)
 	cairo_set_source_surface(cr, glob.image, glob.xoffset, 0);
 	cairo_paint(cr);
 			
-	// draw the capstan and the wheels
+	// draw the capstan
 	if (glob.requested_speed1 != 0.0)
-		cairo_set_source_surface(cr, glob.capstanb[capstan_index], CAPSTANX, CAPSTANY);
+		cairo_set_source_surface(cr, glob.capstanb[capstan_index],
+		CAPSTANX + glob.xoffset, CAPSTANY);
 	else	
-		cairo_set_source_surface(cr, glob.capstan, CAPSTANX, CAPSTANY);
-	cairo_paint(cr);
-	if (glob.requested_speed1 != 0.0) {
-		for (int i = 0; i < NUMWHEELS; i++) {
-			cairo_set_source_surface(cr, glob.wheelb[capstan_index],
-				wheelx[i], wheely[i]);
-			cairo_paint(cr);
-		}
-	}
-	else {	
-		for (int i = 0; i < NUMWHEELS; i++) {
-			cairo_set_source_surface(cr, glob.wheel, wheelx[i], wheely[i]);
-			cairo_paint(cr);
-		}
-	}
+		cairo_set_source_surface(cr, glob.capstan,
+		CAPSTANX + glob.xoffset, CAPSTANY);
 	capstan_index = (capstan_index) + 1 & 1;
-	
+	cairo_paint(cr);
 	
 	// draw the reels
 	int index1 = glob.angle1 * NUMANGLES / 360;
@@ -249,9 +232,15 @@ static void do_drawing(cairo_t *cr)
 	
 	cairo_set_source_rgba(cr, 0.2, 0.1, 0.0, 1.0);
 	cairo_set_line_width(cr, 2);
-	cairo_arc(cr, VC1X, VC1Y - glob.delta_vc1, VC1R, 1.1 * M_PI, 1.9 * M_PI);
+	cairo_move_to(cr, VC1X + VC1R, VC1TOPR);
+	cairo_line_to(cr, VC1X + VC1R, VC1Y + glob.delta_vc1);
+	cairo_arc(cr, VC1X, VC1Y + glob.delta_vc1, VC1R, 0.0, M_PI);
+	cairo_line_to(cr, VC1X - VC1R, VC1TOPL);
 	cairo_stroke(cr);
-	cairo_arc(cr, VC2X, VC2Y + glob.delta_vc2, VC2R, 0.1 * M_PI, 0.9 * M_PI);
+	cairo_move_to(cr, VC2X + VC2R, VC2TOPR);
+	cairo_line_to(cr, VC2X + VC2R, VC2Y + glob.delta_vc2);
+	cairo_arc(cr, VC2X, VC2Y + glob.delta_vc2, VC2R, 0.0, M_PI);
+	cairo_line_to(cr, VC2X - VC2R, VC2TOPL);
 	cairo_stroke(cr);
 	
 	// draw a label onto the removable reel
@@ -532,7 +521,7 @@ int main(int argc, char *argv[])
   
 	char s[32];
   
-	printf("tu77 version 0.3\n");
+	printf("te16 version 0.3\n");
   
 	while (firstArg < argc) {
 		if (strcmp(argv[firstArg],"-full") == 0)
@@ -547,7 +536,7 @@ int main(int argc, char *argv[])
 			}	
 		}           
 		else {
-		printf("tu77: unknown argument %s\n", argv[firstArg]);
+		printf("te16: unknown argument %s\n", argv[firstArg]);
 		exit(1);
 		}
 	firstArg++;
@@ -566,7 +555,7 @@ int main(int argc, char *argv[])
 	glob.radius2 = MAX_TRADIUS -10;
 	d_mSeconds(); // initialize delta timer
   
-	glob.image     = readpng("Tu77-open.png");	
+	glob.image     = readpng("Te16-open.png");
 	int image_width = cairo_image_surface_get_width(glob.image);
 	int image_height = cairo_image_surface_get_height(glob.image);
 	for (int i = 0; i < NUMANGLES; i++) {
@@ -579,12 +568,9 @@ int main(int argc, char *argv[])
 		sprintf(s,"reels/hub%db.png",i);
 		glob.hubb[i] = readpng(s);
 	}
-	glob.capstan   = readpng("reels/capstan2.png");
-	glob.capstanb[0] = readpng("reels/capstan2b1.png");
-	glob.capstanb[1] = readpng("reels/capstan2b2.png");
-	glob.wheel   = readpng("reels/wheel.png");
-	glob.wheelb[0] = readpng("reels/wheelb1.png");
-	glob.wheelb[1] = readpng("reels/wheelb2.png");
+	glob.capstan   = readpng("reels/capstan.png");
+	glob.capstanb[0] = readpng("reels/capstanb1.png");
+	glob.capstanb[1] = readpng("reels/capstanb2.png");
 
 	gtk_init(&argc, &argv);
 
@@ -634,10 +620,10 @@ int main(int argc, char *argv[])
 		gtk_window_set_decorated(GTK_WINDOW(window), TRUE);
 		gtk_window_set_default_size(GTK_WINDOW(window), image_width / 2, image_height / 2);
 		glob.scale = 0.5;
-		glob.xoffset = 0;                
+		glob.xoffset = 0;               
 	} 
   
-	gtk_window_set_title(GTK_WINDOW(window), "tu77");
+	gtk_window_set_title(GTK_WINDOW(window), "te16");
   
 	g_signal_connect(G_OBJECT(window), "button-press-event", G_CALLBACK(on_button_click_event), NULL);
 	g_signal_connect(G_OBJECT(window), "button-release-event", G_CALLBACK(on_button_release_event), NULL);

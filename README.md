@@ -1,9 +1,10 @@
 # tu77: TU77 magnetic tape front panel emulator
 
-Simulation of a TU77 magnetic tape front panel for SimH (PDP-11). The simulation shows an
-open TE16 at the moment. It will be replaced with a TU77 once I have a good image of a TU77.
+Simulation of a TU77 magnetic tape front panel for SimH (PDP-11).
 The TU77 did of course only work properly if the vacuum columns were closed, but it is much
 more intereesting to see how the tape moves in the open vacuum columns.
+
+![tu77 front panel](front.png?raw=true "tu77 front panel")
 
 Vacuum column tape drives are described on
 [Wikipedia - nine track tapes](https://en.wikipedia.org/wiki/9_track_tape)
@@ -104,6 +105,14 @@ If you abort the demo program while it's running you might end up with reels spi
 
 Note: The status file is called tu56status, because it works both for the tu77 magtape
 front panel emulator and the tu56 DECtape front panel emulator.
+
+**Simulating a TE16**
+
+There is also an emulation of a TE16 tape drive including. Start the TE16 emulation with
+
+```
+ ./te16
+```
 
 
 **Installing the proper driver in SimH**
