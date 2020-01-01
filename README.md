@@ -1,26 +1,29 @@
 # TU77 magnetic tape front panel emulator
 
-Simulation of a TU77 magnetic tape front panel for SimH (PDP-11).
-The TU77 did of course only work properly if the vacuum columns were closed, but it is much
-more interesting to see how the tape moves in the open vacuum columns.
+Simulation of a TU77 and a Te16 magnetic tape front panel for SimH (PDP-11).
+The TU77 and the Te16 did of course only work properly if the vacuum columns
+were closed, but it is much more interesting to see how the tape moves in the
+open vacuum columns.
 
-![tu77 front panel](front.jpg?raw=true "tu77 front panel")
+![tu77 front panel](Tu77-front.jpg?raw=true "tu77 front panel")
+![te16 front panel](Te16-front.jpg?raw=true "te16 front panel")
 
 Vacuum column tape drives are described on
 [Wikipedia - nine track tapes](https://en.wikipedia.org/wiki/9_track_tape).
 
 For the Raspberry Pi and other Linux systems.
 
-This [video of TU77 demo](https://youtu.be/ilRWveCcB44) shows the tu77 in action on a PiDP-11.
+[Video of a TU77 demo](https://youtu.be/ilRWveCcB44) showing tu77 in action on a PiDP-11.
+[Video of a TE16 demo](https://youtu.be/8GL19xPuenI) showing te16 in action on a PiDP-11.
 
 The TU77 magnetic tape unit had a very fast tape transportation speed for reads and writes of
 3.2 m/s, and a rotation speed of the reels of up to 500 rpm.
 
-A driver to use tu77 with the PiDP-11 is included.
+A driver to use tu77 and te16 with the PiDP-11 is included.
 
 **Hardware requirements**
 
-This TU77 simulator has been tested on the PiDP-11 using a Raspberry Pi 4B.
+This TU77 and TE16 simulator has been tested on the PiDP-11 using a Raspberry Pi 4B.
 A considerable effort has been made to reduce the CPU usage to acceptable levels. It
 should therefore also work on Raspberry PI 3B  and Raspberry Pi 3B+ models. Please send
 your positive or negative feedback on using tu77 on Raspberry Pi 3 models to

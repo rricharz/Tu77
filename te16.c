@@ -298,7 +298,7 @@ static void do_logic()
 	
 	glob.delta_t = (double)d_mSeconds();
 	
-	if (glob.last_remote_status != glob.remote_status) {
+	if ((glob.last_remote_status != glob.remote_status) || (glob.position != lastPosition)) {
 		/* printf("*** SimH driver state=0x%02x(%c%c%c%c%c%c), target pos=%d\n",
 			glob.remote_status,
 			((glob.remote_status & TSTATE_ONLINE)? 'O':'-'),
@@ -315,10 +315,11 @@ static void do_logic()
 		if (dtime == 0.0) glob.positions_per_msec;
 		else glob.positions_per_msec = (glob.position - lastPosition) / dtime; 
 	}
-	if ((glob.remote_status & TSTATE_SEEK) && (glob.position == 0)) {
+	if (glob.remote_status & TSTATE_SEEK) {
+		int t = glob.position;
 		glob.position = lastPosition;
 		glob.position += glob.positions_per_msec * glob.delta_t;
-		printf("REWINDING, position=%d\n", glob.position);
+		// printf("SEEK/REWIND, target position = %d, current position=%d\n", t, glob.position);
 	}
 		
 	// calculate current tape radius for both reels
@@ -521,7 +522,7 @@ int main(int argc, char *argv[])
   
 	char s[32];
   
-	printf("te16 version 0.3\n");
+	printf("te16 version 0.4\n");
   
 	while (firstArg < argc) {
 		if (strcmp(argv[firstArg],"-full") == 0)
