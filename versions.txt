@@ -2,6 +2,7 @@ Version 0.4 of January 1, 2020
 ******************************
 - shows proper position and tape radius during forward and backward seeks
 - touched up picture of TU77 to show less lighting effects
+- fixed anomalies when attaching 2 tape drives
 
 Version 0.3 of December 31, 2019
 ********************************

@@ -65,7 +65,7 @@
 #define VC1Y			600			// vacuum column 1 y position in dots
 #define VC1R			39			// valuum column 1 radius in dots
 #define VC2X			(807 + glob.xoffset)	// vacuum column 1 x position in dots
-#define VC2Y			450			// vacuum column 1 y position in dots
+#define VC2Y			480			// vacuum column 1 y position in dots
 #define VC2R			39			// valuum column 1 radius in dots
 #define CAPSTANX		(616 + glob.xoffset)
 #define CAPSTANY		836
@@ -99,7 +99,7 @@ int wheely[NUMWHEELS] = {128, 128, 395};
 #define MAX_TRADIUS		190.0		// tape radius in dots
 #define FULL_RPS		4.44		// in turns per second
 #define MAX_DVC1		300		// maximal delta vacuum column 1 in dots
-#define MAX_DVC2		350		// maximal delta vacuum column 2 in dots
+#define MAX_DVC2		300		// maximal delta vacuum column 2 in dots
 #define SCALE_VC		2.2		// scaling for vacuum column
 #define ACCELERATION		1.0		// adjust accelation 
 
@@ -336,8 +336,12 @@ static void do_logic()
 	else
 		glob.remote_status = 0;
 	
-	if (glob.argUnit1 && ((glob.remote_status & TSTATE_DRIVE1) == 0)) return;
-	if ((!glob.argUnit1) && ((glob.remote_status & TSTATE_DRIVE1) != 0)) return;
+	if (glob.argUnit1 && ((glob.remote_status & TSTATE_DRIVE1) == 0)) {
+		glob.remote_status = 0;
+	 }
+	if ((!glob.argUnit1) && ((glob.remote_status & TSTATE_DRIVE1) != 0)) {
+		glob.remote_status = 0;
+	}		
 	
 	glob.delta_t = (double)d_mSeconds();
 	

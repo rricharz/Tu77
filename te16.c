@@ -293,8 +293,12 @@ static void do_logic()
 	int lastPosition = glob.position;
 	glob.remote_status = getStatus();
 	
-	if (glob.argUnit1 && ((glob.remote_status & TSTATE_DRIVE1) == 0)) return;
-	if ((!glob.argUnit1) && ((glob.remote_status & TSTATE_DRIVE1) != 0)) return;
+	if (glob.argUnit1 && ((glob.remote_status & TSTATE_DRIVE1) == 0)) {
+		glob.remote_status = 0;
+	 }
+	if ((!glob.argUnit1) && ((glob.remote_status & TSTATE_DRIVE1) != 0)) {
+		glob.remote_status = 0;
+	}
 	
 	glob.delta_t = (double)d_mSeconds();
 	
